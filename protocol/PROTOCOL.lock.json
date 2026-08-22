@@ -1,7 +1,7 @@
 {
   "protocol_version": "1.0.0",
   "hash_algorithm": "SHA-256",
-  "frozen_at": "2026-08-22T12:11:20.116269+00:00",
+  "frozen_at": "2026-08-22T12:19:50.170552+00:00",
   "notes": "Hashes computed by protocol/freeze_protocol.py. Changes after freezing require version bump and re-preregistration.",
   "files_tracked": [
     "analysis/leakage_check.py",
@@ -20,7 +20,7 @@
     "protocol/protocol.md"
   ],
   "file_hashes": {
-    "analysis/leakage_check.py": "76e2951cd808086b3ff407d3999f25e8df7a779ae7056167758cff5d75dd25ee",
+    "analysis/leakage_check.py": "ba3e3418259f6b8e38a85b3681f2c4d07c6baf513d5e6a76f4de57041b80d4eb",
     "analysis/power_simulation.py": "3b834bccf0da55ba57d49fa2a5bb3d151f57d36ddc6737e3c2db82a25ea56301",
     "datasets/t2_generator/generator.py": "d158fd585fb65b4ade316d26e9eafabd62176c61e2b0ab29f50a2984ac1b623b",
     "harness/conditions.py": "9cd9da1d32ae61115557da85cfdee50ec8eaa8bf64c789cd58d917dfc652a033",

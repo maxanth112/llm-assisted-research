@@ -5,6 +5,11 @@ Leakage detection script for T2 dataset.
 This script implements multiple baseline methods to detect potential data leakage
 in the T2 dataset by checking if simple heuristics can predict correct answers
 above chance level.
+
+Supports T2 items with:
+  - hypotheses: list[str]
+  - gold_answer: str
+  - narrative: str
 """
 
 import argparse
@@ -35,8 +40,10 @@ def load_items_from_jsonl(path: str) -> List[Dict[str, Any]]:
 def majority_class_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Compute majority class baseline accuracy.
 
+    Predicts the most common gold answer for all items.
+
     Args:
-        items: List of item dictionaries with 'correct_hypothesis' field
+        items: List of item dictionaries with 'gold_answer' field
 
     Returns:
         Dictionary with accuracy and most_common_answer
@@ -44,27 +51,27 @@ def majority_class_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not items:
         return {"accuracy": 0.0, "most_common_answer": None, "n_items": 0}
 
-    correct_answers = [item.get("correct_hypothesis") for item in items]
-    counter = Counter(correct_answers)
+    gold_answers = [item.get("gold_answer", "") for item in items]
+    counter = Counter(gold_answers)
     most_common_answer, most_common_count = counter.most_common(1)[0]
 
-    accuracy = most_common_count / len(items)
+    acc = most_common_count / len(items)
 
     return {
-        "accuracy": accuracy,
+        "accuracy": acc,
         "most_common_answer": most_common_answer,
         "n_items": len(items)
     }
 
 
 def lexical_overlap_heuristic(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Predict hypothesis whose name appears most often in narrative.
+    """Predict hypothesis whose text appears most often in narrative.
 
-    For each item, count how many times each hypothesis name appears in the
-    narrative text and predict the one with highest count.
+    For each item, count how many times each hypothesis text appears in the
+    narrative and predict the one with the highest count.
 
     Args:
-        items: List of item dictionaries
+        items: List of item dictionaries with hypotheses as list[str]
 
     Returns:
         Dictionary with accuracy and per-item predictions
@@ -74,37 +81,40 @@ def lexical_overlap_heuristic(items: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     for item in items:
         narrative = item.get("narrative", "").lower()
-        hypotheses = item.get("hypotheses", {})
-        correct_hypothesis = item.get("correct_hypothesis")
+        hypotheses = item.get("hypotheses", [])
+        gold_answer = item.get("gold_answer", "")
 
-        # Count mentions of each hypothesis name in narrative
+        if not hypotheses:
+            continue
+
+        # Count mentions of each hypothesis text in narrative
         mention_counts = {}
-        for hyp_id, hyp_data in hypotheses.items():
-            name = hyp_data.get("name", "").lower()
-            # Count occurrences of the name in narrative
+        for hyp in hypotheses:
+            hyp_lower = hyp.lower()
+            # Extract the key name (e.g., "Alex Chen" from "Alex Chen is responsible")
+            parts = hyp_lower.split(" is responsible")
+            name = parts[0] if len(parts) > 1 else hyp_lower
             count = narrative.count(name)
-            mention_counts[hyp_id] = count
+            mention_counts[hyp] = count
 
         # Predict hypothesis with most mentions
-        if mention_counts:
-            predicted = max(mention_counts.keys(), key=lambda k: mention_counts[k])
-            predictions.append({
-                "item_id": item.get("item_id"),
-                "predicted": predicted,
-                "correct": correct_hypothesis,
-                "mention_counts": mention_counts
-            })
+        predicted = max(mention_counts.keys(), key=lambda k: mention_counts[k])
+        predictions.append({
+            "item_id": item.get("id", ""),
+            "predicted": predicted,
+            "correct": gold_answer,
+            "mention_counts": {k: v for k, v in mention_counts.items()},
+        })
 
-            if predicted == correct_hypothesis:
-                correct += 1
+        if predicted == gold_answer:
+            correct += 1
 
-    accuracy = correct / len(items) if items else 0.0
+    acc = correct / len(items) if items else 0.0
 
     return {
-        "accuracy": accuracy,
+        "accuracy": acc,
         "n_items": len(items),
         "n_correct": correct,
-        "predictions": predictions
     }
 
 
@@ -123,29 +133,27 @@ def simple_word_frequency_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any
     correct = 0
 
     for item in items:
-        narrative = item.get("narrative", "").lower().split()
-        narrative_words = set(narrative)
-        hypotheses = item.get("hypotheses", {})
-        correct_hypothesis = item.get("correct_hypothesis")
+        narrative_words = set(item.get("narrative", "").lower().split())
+        hypotheses = item.get("hypotheses", [])
+        gold_answer = item.get("gold_answer", "")
 
-        # Compute word overlap for each hypothesis
+        if not hypotheses:
+            continue
+
         overlap_scores = {}
-        for hyp_id, hyp_data in hypotheses.items():
-            hyp_text = hyp_data.get("description", "").lower().split()
-            hyp_words = set(hyp_text)
+        for hyp in hypotheses:
+            hyp_words = set(hyp.lower().split())
             overlap = len(narrative_words & hyp_words)
-            overlap_scores[hyp_id] = overlap
+            overlap_scores[hyp] = overlap
 
-        # Predict hypothesis with highest overlap
-        if overlap_scores:
-            predicted = max(overlap_scores.keys(), key=lambda k: overlap_scores[k])
-            if predicted == correct_hypothesis:
-                correct += 1
+        predicted = max(overlap_scores.keys(), key=lambda k: overlap_scores[k])
+        if predicted == gold_answer:
+            correct += 1
 
-    accuracy = correct / len(items) if items else 0.0
+    acc = correct / len(items) if items else 0.0
 
     return {
-        "accuracy": accuracy,
+        "accuracy": acc,
         "n_items": len(items),
         "n_correct": correct,
         "method": "simple_word_frequency"
@@ -153,9 +161,10 @@ def simple_word_frequency_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any
 
 
 def bow_logistic_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """TF-IDF + LogisticRegression baseline with 5-fold cross-validation.
+    """TF-IDF + LogisticRegression baseline with cross-validation.
 
-    Falls back to simple_word_frequency_baseline if sklearn is unavailable.
+    Falls back to simple_word_frequency_baseline if sklearn is unavailable
+    or there are too few items.
 
     Args:
         items: List of item dictionaries
@@ -178,18 +187,19 @@ def bow_logistic_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any]:
               file=sys.stderr)
         return simple_word_frequency_baseline(items)
 
-    # Prepare data: narrative text and correct hypothesis labels
+    # Prepare data: narrative text and gold answer labels
     texts = []
     labels = []
 
     for item in items:
-        narrative = item.get("narrative", "")
-        correct_hypothesis = item.get("correct_hypothesis")
-        texts.append(narrative)
-        labels.append(correct_hypothesis)
+        texts.append(item.get("narrative", ""))
+        labels.append(item.get("gold_answer", ""))
 
     # Convert to numeric labels
     unique_labels = sorted(set(labels))
+    if len(unique_labels) < 2:
+        return simple_word_frequency_baseline(items)
+
     label_to_idx = {label: idx for idx, label in enumerate(unique_labels)}
     y = np.array([label_to_idx[label] for label in labels])
 
@@ -198,18 +208,20 @@ def bow_logistic_baseline(items: List[Dict[str, Any]]) -> Dict[str, Any]:
     try:
         X = vectorizer.fit_transform(texts)
     except ValueError:
-        # Fallback if TF-IDF fails
         return simple_word_frequency_baseline(items)
 
-    # Logistic regression with 5-fold CV
+    # Logistic regression with k-fold CV
     clf = LogisticRegression(max_iter=1000, random_state=42)
+    k = min(5, min(Counter(y).values()), len(items))
+    if k < 2:
+        return simple_word_frequency_baseline(items)
 
     try:
-        scores = cross_val_score(clf, X, y, cv=min(5, len(items)), scoring='accuracy')
-        accuracy = np.mean(scores)
+        scores = cross_val_score(clf, X, y, cv=k, scoring='accuracy')
+        acc = float(np.mean(scores))
 
         return {
-            "accuracy": float(accuracy),
+            "accuracy": acc,
             "n_items": len(items),
             "method": "tfidf_logistic_cv",
             "cv_scores": [float(s) for s in scores],
@@ -232,7 +244,7 @@ def run_leakage_check(items: List[Dict[str, Any]], alpha: float = 0.05) -> Dict[
         Dictionary with results from all methods and overall verdict
     """
     # Compute chance level (1 / average number of hypotheses per item)
-    n_hypotheses_per_item = [len(item.get("hypotheses", {})) for item in items]
+    n_hypotheses_per_item = [len(item.get("hypotheses", [])) for item in items]
     avg_n_hypotheses = sum(n_hypotheses_per_item) / len(items) if items else 1
     chance_level = 1.0 / avg_n_hypotheses
     threshold = chance_level + alpha
@@ -295,8 +307,8 @@ if __name__ == "__main__":
     report = run_leakage_check(items, alpha=args.alpha)
 
     # Print summary to stdout
-    print(f"Leakage Check Report")
-    print(f"====================")
+    print("Leakage Check Report")
+    print("====================")
     print(f"Items: {report['n_items']}")
     print(f"Chance level: {report['chance_level']:.3f}")
     print(f"Threshold: {report['threshold']:.3f}")
