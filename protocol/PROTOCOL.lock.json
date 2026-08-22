@@ -1,0 +1,38 @@
+{
+  "protocol_version": "1.0.0",
+  "hash_algorithm": "SHA-256",
+  "frozen_at": "2026-08-22T12:11:20.116269+00:00",
+  "notes": "Hashes computed by protocol/freeze_protocol.py. Changes after freezing require version bump and re-preregistration.",
+  "files_tracked": [
+    "analysis/leakage_check.py",
+    "analysis/power_simulation.py",
+    "datasets/t2_generator/generator.py",
+    "harness/conditions.py",
+    "harness/engine.py",
+    "harness/parsers.py",
+    "harness/prompts/templates.py",
+    "harness/providers/base.py",
+    "harness/providers/mock_adapter.py",
+    "harness/providers/openai_compat.py",
+    "harness/randomization.py",
+    "harness/schemas.py",
+    "harness/scoring.py",
+    "protocol/protocol.md"
+  ],
+  "file_hashes": {
+    "analysis/leakage_check.py": "76e2951cd808086b3ff407d3999f25e8df7a779ae7056167758cff5d75dd25ee",
+    "analysis/power_simulation.py": "3b834bccf0da55ba57d49fa2a5bb3d151f57d36ddc6737e3c2db82a25ea56301",
+    "datasets/t2_generator/generator.py": "d158fd585fb65b4ade316d26e9eafabd62176c61e2b0ab29f50a2984ac1b623b",
+    "harness/conditions.py": "9cd9da1d32ae61115557da85cfdee50ec8eaa8bf64c789cd58d917dfc652a033",
+    "harness/engine.py": "fcc2b43e965707b41c515cafaf63464354b5d1b8a20fe88b2e5c775a070b068a",
+    "harness/parsers.py": "86bfd8e83d6e40cdc4d1803631f47bd210f3a790cfcfdf59ed61fb4ac166fb9f",
+    "harness/prompts/templates.py": "1c3cc300f5b8c9c949ae804ef7ffb58206c743c91d4ea62d9cce1a61b55f5284",
+    "harness/providers/base.py": "6c7b12fd669b754bee3518a4c75d9d92c4115f9509a27c443aa94b617332fe8f",
+    "harness/providers/mock_adapter.py": "6aa7c9070505ab8f3b4217ef0d7c729abb4695c69dfe1e056a249ccd291f4821",
+    "harness/providers/openai_compat.py": "2e090d3e12c2405cc9f90b6ceb7d3f04dd458ba8cdb4fd47c51502c69b2d9316",
+    "harness/randomization.py": "e059bbafee87c59aac414d54fc8a206f6222be185d930e7953dff362eb530c72",
+    "harness/schemas.py": "73db1ad453e5d54a311a106735db0c24ffb30b46e69df6a4dbcad9e083b1eb2d",
+    "harness/scoring.py": "c5975da18959587fddbaa2340cc15fc8e1cf44414af784de34c1664ed23ac87c",
+    "protocol/protocol.md": "1aec9d32fe449e9c90d9dcad2b605d741efa877f4843ba4ba52094e01586adc5"
+  }
+}
