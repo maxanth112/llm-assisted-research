@@ -1,0 +1,11 @@
+{
+  "dataset": "FaithEval",
+  "source": "https://huggingface.co/datasets/SalesforceAIResearch/FaithEval",
+  "version": "main",
+  "revision": "latest",
+  "license": "Apache-2.0",
+  "description": "Faithfulness evaluation dataset testing model behavior under conflicting context/instructions.",
+  "sha256": "TO_BE_COMPUTED_AT_RETRIEVAL",
+  "retrieval_script": "datasets/retrieve_faitheval.py",
+  "notes": "Candidate for conflict and insufficient evidence experimental arms."
+}

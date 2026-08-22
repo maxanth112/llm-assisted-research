@@ -1,0 +1,12 @@
+{
+  "dataset": "MuSR",
+  "source": "https://huggingface.co/datasets/TAUR-Lab/MuSR",
+  "version": "main",
+  "revision": "latest",
+  "license": "CC-BY-4.0",
+  "subset": "murder_mystery",
+  "description": "Multi-step reasoning dataset with murder mystery scenarios. Each item has 2 suspects, evidence, and a deterministic gold answer.",
+  "sha256": "TO_BE_COMPUTED_AT_RETRIEVAL",
+  "retrieval_script": "datasets/retrieve_musr.py",
+  "notes": "2-suspect ceiling limits ACH matrix evaluation. Use as T1 baseline."
+}
