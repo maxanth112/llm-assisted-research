@@ -1,6 +1,75 @@
-.DS_Store
+# Secrets and credentials
 .env
+.env.*
+*.key
+*.pem
+secrets*
+credentials*
+*_secret*
+*_token*
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
 .venv/
+venv/
+env/
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# Caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+*.cache
+response_cache/
+cache/
+
+# Downloaded dataset payloads (commit only manifests/retrieval scripts)
+datasets/data/
+datasets/raw/
+datasets/downloads/
+*.parquet
+*.arrow
+*.hf/
+
+# Large data files
+*.csv.gz
+*.tar.gz
+*.zip
+
+# Signed/temporary URLs
+*signed_url*
+*temp_url*
+
+# Local config
+local_config.*
+*.local
+
+# Node
 node_modules/
+
+# Logs (keep structured ledgers, exclude ad-hoc logs)
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Coverage
+htmlcov/
+.coverage
