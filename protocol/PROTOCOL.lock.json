@@ -1,8 +1,9 @@
 {
-  "protocol_version": "1.0.0",
+  "protocol_version": "1.1.0",
   "hash_algorithm": "SHA-256",
-  "frozen_at": "2026-08-22T12:19:50.170552+00:00",
-  "notes": "Hashes computed by protocol/freeze_protocol.py. Changes after freezing require version bump and re-preregistration.",
+  "frozen_at": "2026-08-23T00:00:00.000000+00:00",
+  "notes": "Updated per AMENDMENT-001: T2 generator and leakage checker replaced (v1 -> v2). Old hashes preserved in superseded_hashes. New hashes added to file_hashes.",
+  "amendment": "AMENDMENT-001",
   "files_tracked": [
     "analysis/leakage_check.py",
     "analysis/power_simulation.py",
@@ -17,12 +18,13 @@
     "harness/randomization.py",
     "harness/schemas.py",
     "harness/scoring.py",
-    "protocol/protocol.md"
+    "protocol/protocol.md",
+    "protocol/AMENDMENT-001.md"
   ],
   "file_hashes": {
-    "analysis/leakage_check.py": "ba3e3418259f6b8e38a85b3681f2c4d07c6baf513d5e6a76f4de57041b80d4eb",
+    "analysis/leakage_check.py": "1c16152e390f36ee0091e12d1f18f9b92643b5ee075c6c56c065f59751e23fe4",
     "analysis/power_simulation.py": "3b834bccf0da55ba57d49fa2a5bb3d151f57d36ddc6737e3c2db82a25ea56301",
-    "datasets/t2_generator/generator.py": "d158fd585fb65b4ade316d26e9eafabd62176c61e2b0ab29f50a2984ac1b623b",
+    "datasets/t2_generator/generator.py": "f6cc03f405dd84794eb24314c01d696bbb9fa73dfac163558d0e1d1c5c12c62c",
     "harness/conditions.py": "9cd9da1d32ae61115557da85cfdee50ec8eaa8bf64c789cd58d917dfc652a033",
     "harness/engine.py": "fcc2b43e965707b41c515cafaf63464354b5d1b8a20fe88b2e5c775a070b068a",
     "harness/parsers.py": "86bfd8e83d6e40cdc4d1803631f47bd210f3a790cfcfdf59ed61fb4ac166fb9f",
@@ -34,5 +36,10 @@
     "harness/schemas.py": "73db1ad453e5d54a311a106735db0c24ffb30b46e69df6a4dbcad9e083b1eb2d",
     "harness/scoring.py": "c5975da18959587fddbaa2340cc15fc8e1cf44414af784de34c1664ed23ac87c",
     "protocol/protocol.md": "1aec9d32fe449e9c90d9dcad2b605d741efa877f4843ba4ba52094e01586adc5"
+  },
+  "superseded_hashes": {
+    "_note": "These are the v1 hashes from the original protocol freeze. Preserved for audit trail per AMENDMENT-001 §5.",
+    "analysis/leakage_check.py": "ba3e3418259f6b8e38a85b3681f2c4d07c6baf513d5e6a76f4de57041b80d4eb",
+    "datasets/t2_generator/generator.py": "d158fd585fb65b4ade316d26e9eafabd62176c61e2b0ab29f50a2984ac1b623b"
   }
 }

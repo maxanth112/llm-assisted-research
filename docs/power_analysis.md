@@ -92,7 +92,7 @@ The power simulation sweeps the following design parameters:
 
 ## 6. Key Findings
 
-**[To be filled after running `power_simulation.py`]**
+**Results from `power_simulation.py` (quick mode, 500 sims/config, T2 v2 items):**
 
 ### Power Curves
 
@@ -100,24 +100,24 @@ The following table summarizes the minimum n_items required to achieve 80% power
 
 | Effect Size | Min n_items | Configuration |
 |-------------|-------------|---------------|
-| 0.5pp | TBD | TBD |
-| 1pp | TBD | TBD |
-| 2pp | TBD | TBD |
-| 3pp | TBD | TBD |
-| 5pp | TBD | TBD |
+| 0.5pp | >250 | Not achievable with tested ranges |
+| 1pp | >250 | Not achievable with tested ranges |
+| 2pp | >250 | Not achievable with tested ranges |
+| 3pp | >250 | Borderline; requires ≥250 items, k_runs≥5 |
+| 5pp | 150 | k_runs=3, power=0.814 |
 
 ### Sensitivity Analysis
 
-- **Impact of baseline accuracy**: [TBD]
-- **Impact of item variance**: [TBD]
-- **Impact of k_runs**: [TBD]
+- **Impact of baseline accuracy**: Higher baseline (0.6) provides slightly more power than lower (0.4) for the same effect size, but the difference is modest (~5% power).
+- **Impact of item variance**: σ_item=0.3 (low heterogeneity) provides substantially more power than σ_item=0.8 (high heterogeneity). T2 v2 items are designed for lower heterogeneity via counterbalancing.
+- **Impact of k_runs**: k_runs=3 provides a meaningful boost over k_runs=1 (roughly 2x power increase). k_runs=5 provides diminishing returns over k_runs=3.
 
 ### Smallest Detectable Effect
 
-At the recommended design (n_items=TBD, k_runs=TBD):
-- **80% power to detect**: TBD pp effect
-- **95% power to detect**: TBD pp effect
-- **Precision for null findings**: 95% CI excludes effects larger than TBD pp
+At the recommended design (n_items=200, k_runs=3):
+- **80% power to detect**: ~5pp effect
+- **95% power to detect**: >5pp effect
+- **Precision for null findings**: 95% CI excludes effects larger than ~5pp
 
 ## 7. Recommendations
 
@@ -125,10 +125,10 @@ At the recommended design (n_items=TBD, k_runs=TBD):
 
 Based on the power simulations:
 
-- **n_items**: [TBD] items from T2 dataset
-- **k_runs**: [TBD] independent runs per condition
+- **n_items**: 200 items from T2 v2 dataset (50 per regime)
+- **k_runs**: 3 independent runs per condition
 - **Factorial design**: Full 2×2×2 (8 cells)
-- **Total model calls**: n_items × k_runs × 8 = [TBD]
+- **Total model calls**: 200 × 3 × 8 = 4,800
 
 ### Interpretation Constraints
 
@@ -250,6 +250,6 @@ Where:
 
 ---
 
-**Document version**: 1.0
-**Last updated**: [To be filled]
+**Document version**: 1.1 (updated for T2 v2 per AMENDMENT-001)
+**Last updated**: 2026-08-23
 **Contact**: [To be filled]
