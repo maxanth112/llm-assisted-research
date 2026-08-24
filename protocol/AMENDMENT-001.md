@@ -179,6 +179,156 @@ The following must hold over any generated batch of ≥100 items:
 The old hash is **preserved** in PROTOCOL.lock.json (marked as superseded).
 The new hash is **added** alongside it.
 
+## 6. Observed Outcomes (POST-OUTCOME)
+
+**Evaluation date:** 2026-08-24
+**Evaluation script:** `analysis/run_leakage_eval.py`
+**Machine-readable results:** `analysis/leakage_results_v2.json`
+
+### 6.1 Corpus Statistics
+
+| Corpus | N items | Chance level | Threshold (chance + 0.05) |
+|--------|---------|--------------|---------------------------|
+| Template-held-out (train) | 5,250 | 0.3158 | 0.3658 |
+| Final-audit | 750 | 0.3158 | 0.3658 |
+
+Template families (7): contamination_alibi, data_breach_alibi, data_breach_timeline,
+sabotage_alibi, sabotage_timeline, theft_alibi, theft_timeline.
+
+Regime distribution (train): CLEAN=1,750, DECOY=1,750, CONFLICT=875, INSUFFICIENT=875.
+
+### 6.2 Template-Held-Out Results (Aggregate)
+
+| # | Baseline | Accuracy | 95% Wilson CI | Verdict |
+|---|----------|----------|---------------|---------|
+| 1 | Majority class | 0.1667 | [0.1568, 0.1770] | PASS |
+| 2 | Label position | 0.2773 | [0.2654, 0.2896] | PASS |
+| 3 | Mention count | 0.2773 | [0.2654, 0.2896] | PASS |
+| 4 | Evidence count | 0.2773 | [0.2654, 0.2896] | PASS |
+| 5 | Lexical overlap | 0.2773 | [0.2654, 0.2896] | PASS |
+| 6 | TF-IDF word | 0.4350 | [0.4217, 0.4485] | **FAIL** |
+| 7 | TF-IDF char | 0.4333 | [0.4200, 0.4468] | **FAIL** |
+| 8 | Length feature | 0.4451 | [0.4317, 0.4586] | **FAIL** |
+| 9 | Polarity feature | 0.4421 | [0.4287, 0.4556] | **FAIL** |
+| 10 | Positional feature | 0.4478 | [0.4344, 0.4613] | **FAIL** |
+| 11 | Combined shallow | 0.4471 | [0.4336, 0.4605] | **FAIL** |
+
+### 6.3 Per-Regime Breakdown (Template-Held-Out)
+
+**CLEAN** (chance = 0.333, threshold = 0.383):
+
+| # | Baseline | Accuracy | Verdict |
+|---|----------|----------|---------|
+| 1 | Majority class | 0.115 | PASS |
+| 2 | Label position | 0.330 | PASS |
+| 3 | Mention count | 0.330 | PASS |
+| 4 | Evidence count | 0.330 | PASS |
+| 5 | Lexical overlap | 0.330 | PASS |
+| 6 | TF-IDF word | 0.321 | PASS |
+| 7 | TF-IDF char | 0.325 | PASS |
+| 8 | Length feature | 0.336 | PASS |
+| 9 | Polarity feature | 0.331 | PASS |
+| 10 | Positional feature | 0.355 | PASS |
+| 11 | Combined shallow | 0.354 | PASS |
+
+**DECOY** (chance = 0.333, threshold = 0.383):
+
+| # | Baseline | Accuracy | Verdict |
+|---|----------|----------|---------|
+| 1–11 | All baselines | 0.115–0.351 | **All PASS** |
+
+**CONFLICT** (chance = 0.333, threshold = 0.383):
+
+| # | Baseline | Accuracy | CI Upper | Verdict |
+|---|----------|----------|----------|---------|
+| 1–7, 9–10 | 9 baselines | 0.126–0.347 | ≤0.383 | PASS |
+| 8 | Length feature | 0.359 | 0.391 | **FAIL** |
+| 11 | Combined shallow | 0.359 | 0.391 | **FAIL** |
+
+**INSUFFICIENT** (chance = 0.250, threshold = 0.300):
+
+| # | Baseline | Accuracy | Verdict |
+|---|----------|----------|---------|
+| 1, 6–11 | 7 baselines | 1.000 | **FAIL** |
+| 2–5 | 4 heuristic baselines | 0.000 | PASS |
+
+### 6.4 Final-Audit Results
+
+| # | Baseline | Accuracy | 95% Wilson CI | Verdict |
+|---|----------|----------|---------------|---------|
+| 1 | Majority class | 0.1667 | [0.1417, 0.1950] | PASS |
+| 2 | Label position | 0.2760 | [0.2452, 0.3091] | PASS |
+| 3 | Mention count | 0.2760 | [0.2452, 0.3091] | PASS |
+| 4 | Evidence count | 0.2760 | [0.2452, 0.3091] | PASS |
+| 5 | Lexical overlap | 0.2760 | [0.2452, 0.3091] | PASS |
+| 6 | TF-IDF word | 0.4480 | [0.4128, 0.4838] | **FAIL** |
+| 7 | TF-IDF char | 0.4467 | [0.4114, 0.4824] | **FAIL** |
+| 8 | Length feature | 0.4613 | [0.4259, 0.4971] | **FAIL** |
+| 9 | Polarity feature | 0.4507 | [0.4154, 0.4864] | **FAIL** |
+| 10 | Positional feature | 0.4427 | [0.4075, 0.4784] | **FAIL** |
+| 11 | Combined shallow | 0.4387 | [0.4036, 0.4744] | **FAIL** |
+
+### 6.5 Overall Verdict
+
+**FAIL.**
+
+### 6.6 Diagnosis of Leaking Features
+
+Two leakage sources were identified:
+
+**Source 1 — INSUFFICIENT regime structural leak (primary, severe):**
+All INSUFFICIENT items share the gold answer "Cannot be determined from available
+evidence," a string that never appears as a gold answer in other regimes. Any
+classifier trivially identifies items with 4 hypotheses (3 suspects + the "Cannot
+be determined" option) and predicts index 3 with 100% accuracy. This inflates
+aggregate accuracy for all classifier baselines (6–11) to ~0.43–0.46, far above
+the threshold of 0.366.
+
+This is a *structural* leak — the INSUFFICIENT regime's answer format is
+categorically different from the other regimes — not a *surface-cue* leak in the
+evidence or narrative text. The counterbalancing invariants (name-frequency,
+evidence-count, polarity balance) function correctly for CLEAN, DECOY, and
+CONFLICT regimes.
+
+**Source 2 — CONFLICT regime marginal leak (secondary, minor):**
+Two baselines (8_length_feature, 11_combined_shallow) exceed the threshold on
+CONFLICT items with CI upper = 0.391 vs threshold 0.383 (+0.8 pp margin).
+This suggests a minor residual length imbalance in CONFLICT evidence items.
+
+### 6.7 Impact on T2 v2 Validity
+
+**For CLEAN and DECOY regimes, T2 v2 passes all 11 baselines.** The relational-
+reasoning design, name-frequency equalization, and counterfactual pairs work as
+intended. Within-item factorial comparisons (D=0 vs D=1) remain valid for CLEAN
+and DECOY items.
+
+**For CONFLICT, T2 v2 passes 9/11 baselines.** The two marginal failures are
+small (+0.8 pp) and confined to length-based features. Factorial comparisons on
+CONFLICT items should be interpreted with this caveat noted.
+
+**For INSUFFICIENT, T2 v2 fails structurally.** The regime's answer format makes
+it trivially identifiable. However, since INSUFFICIENT items test whether models
+recognize epistemic limits (gold = "Cannot be determined"), and this recognition
+does not depend on surface-cue leakage between suspects, the structural
+identifiability is *not a confound for the primary research question* (whether
+ACH scaffolding improves relational reasoning). INSUFFICIENT items test a
+qualitatively different capability (uncertainty acknowledgment) where the answer
+format is inherently distinct.
+
+**Recommendation:** Report T2 v2 results separately by regime. Use CLEAN and
+DECOY items for the primary ACH scaffolding analysis. Note the CONFLICT caveat
+and INSUFFICIENT structural limitation.
+
+### 6.8 Compliance with §4.3
+
+Per §4.3: "The final-audit set is evaluated exactly ONCE. If it fails, the
+failure is reported honestly; no further tuning is permitted without filing
+AMENDMENT-002."
+
+The final-audit set was evaluated exactly once. It fails for the same reasons
+as the held-out set (INSUFFICIENT structural leak + minor CONFLICT length leak).
+The failure is reported honestly above. No further tuning has been performed.
+
 ---
 
 **Filed by:** Automated Stage 4B build
@@ -186,3 +336,5 @@ The new hash is **added** alongside it.
 The acceptance criteria (§4) were specified before the repaired generator was
 evaluated. If the final-audit set fails, the failure will be reported without
 further tuning (per §4.3).
+**Post-outcome note (§6):** Outcomes recorded 2026-08-24. Overall verdict: FAIL.
+Failures diagnosed and reported per §4.3.
