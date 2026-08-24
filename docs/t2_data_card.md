@@ -6,37 +6,42 @@
 
 **Purpose**: Controlled evaluation of Analysis of Competing Hypotheses (ACH) scaffolding effects on language model reasoning. T2 consists of deterministic diagnostic items designed for within-item factorial comparisons across evidence presentation modes, reasoning trajectories, and dataset regimes.
 
-**Version**: 1.0.0
+**Version**: 2.0.0 (T2 v2, per AMENDMENT-001)
 **Format**: JSONL (JSON Lines)
 **License**: MIT (generated content, no external copyrights)
-**Repository**: [To be filled]
+**Repository**: https://github.com/maxanth112/llm-assisted-research
 
 ## Dataset Statistics
 
 ### Overall
 
-- **Total items**: [To be filled after generation]
+- **Total items**: 6,000 (5,250 train + 750 final-audit)
 - **Item format**: JSON objects with narrative, hypotheses, evidence, and metadata
-- **Hypotheses per item**: ≥3 (range: [TBD])
-- **Evidence items per item**: [TBD]
+- **Hypotheses per item**: 3-4 (mean: 3.17; INSUFFICIENT items have 4, others have 3)
+- **Evidence items per item**: 7-10 (mean: 8.17)
 
 ### Distribution by Regime
 
 | Regime | Count | Percentage | Description |
 |--------|-------|------------|-------------|
-| CLEAN | TBD | TBD% | Straightforward cases with clear evidence |
-| DECOY | TBD | TBD% | Includes plausible but irrelevant distractors |
-| CONFLICT | TBD | TBD% | Contains contradictory or ambiguous evidence |
-| INSUFFICIENT | TBD | TBD% | Requires acknowledging gaps in evidence |
+| CLEAN | 2,000 | 33.3% | Straightforward cases with clear evidence |
+| DECOY | 2,000 | 33.3% | Includes plausible but irrelevant distractors |
+| CONFLICT | 1,000 | 16.7% | Contains contradictory or ambiguous evidence |
+| INSUFFICIENT | 1,000 | 16.7% | Requires acknowledging gaps in evidence |
 
 ### Distribution by Scenario Template
 
 | Template | Count | Percentage |
 |----------|-------|------------|
-| theft | TBD | TBD% |
-| sabotage | TBD | TBD% |
-| data_breach | TBD | TBD% |
-| contamination | TBD | TBD% |
+| theft (alibi + timeline) | 1,500 | 25.0% |
+| sabotage (alibi + timeline) | 1,500 | 25.0% |
+| data_breach (alibi + timeline) | 1,500 | 25.0% |
+| contamination (alibi + timeline) | 1,500 | 25.0% |
+
+**Template families (8):** theft_alibi, theft_timeline, sabotage_alibi, sabotage_timeline,
+data_breach_alibi, data_breach_timeline, contamination_alibi, contamination_timeline.
+Each family contributes 750 items. The contamination_timeline family is reserved as the
+final-audit set; the remaining 7 families form the train/held-out evaluation set.
 
 ## Regime Descriptions
 
@@ -162,23 +167,59 @@ To mitigate spurious correlations and lexical leakage:
 
 ## Leakage Check Results
 
-**[To be filled after running `leakage_check.py`]**
+**Evaluated:** 2026-08-24 per AMENDMENT-001 acceptance criteria.
+**Script:** `analysis/run_leakage_eval.py`
+**Full results:** `analysis/leakage_results_v2.json`
 
-### Baseline Methods
+### Baseline Methods (Template-Held-Out Evaluation)
 
-| Method | Accuracy | Verdict | Notes |
-|--------|----------|---------|-------|
-| Majority class | TBD | TBD | Guessing most frequent correct hypothesis |
-| Lexical overlap | TBD | TBD | Predicting hypothesis mentioned most in narrative |
-| TF-IDF + Logistic | TBD | TBD | Bag-of-words with cross-validation |
+| # | Method | Accuracy | 95% Wilson CI | Verdict | Notes |
+|---|--------|----------|---------------|---------|-------|
+| 1 | Majority class | 0.167 | [0.157, 0.177] | PASS | Guessing most frequent answer |
+| 2 | Label position | 0.277 | [0.265, 0.290] | PASS | Always predict first hypothesis |
+| 3 | Mention count | 0.277 | [0.265, 0.290] | PASS | Predict most-mentioned suspect |
+| 4 | Evidence count | 0.277 | [0.265, 0.290] | PASS | Predict suspect in most evidence items |
+| 5 | Lexical overlap | 0.277 | [0.265, 0.290] | PASS | Hypothesis-evidence word overlap |
+| 6 | TF-IDF word | 0.435 | [0.422, 0.449] | FAIL | Word-level TF-IDF + LogReg |
+| 7 | TF-IDF char | 0.433 | [0.420, 0.447] | FAIL | Char-level TF-IDF + LogReg |
+| 8 | Length feature | 0.445 | [0.432, 0.459] | FAIL | Evidence length per candidate |
+| 9 | Polarity feature | 0.442 | [0.429, 0.456] | FAIL | Support/contradict counts |
+| 10 | Positional feature | 0.448 | [0.434, 0.461] | FAIL | Evidence order features |
+| 11 | Combined shallow | 0.447 | [0.434, 0.461] | FAIL | All structured features |
 
 ### Interpretation
 
-- **Chance level**: 1 / (average hypotheses per item) ≈ TBD
-- **Threshold**: Chance + 0.05 = TBD
-- **Overall verdict**: [PASS/FAIL]
+- **Chance level**: 1 / 3.17 = 0.316
+- **Threshold**: 0.316 + 0.05 = 0.366
+- **Overall verdict**: **FAIL**
 
-**Conclusion**: [To be filled - should be PASS, confirming no trivial shortcuts]
+### Per-Regime Analysis
+
+| Regime | Heuristic baselines (1-5) | Classifier baselines (6-11) | Notes |
+|--------|---------------------------|----------------------------|-------|
+| CLEAN | All PASS | All PASS | No leakage detected |
+| DECOY | All PASS | All PASS | No leakage detected |
+| CONFLICT | All PASS | 4/6 PASS, 2/6 marginal FAIL | Length and combined: CI upper 0.391 vs threshold 0.383 |
+| INSUFFICIENT | 4/5 PASS | All FAIL (100% accuracy) | Structural leak: answer format categorically different |
+
+### Diagnosis
+
+**Primary failure:** The INSUFFICIENT regime uses a categorically different gold
+answer ("Cannot be determined from available evidence") that is trivially
+distinguishable from named-suspect answers. Any classifier achieves 100%
+accuracy on INSUFFICIENT items, inflating aggregate scores.
+
+**Secondary failure:** Minor length-based leakage in CONFLICT items (2 baselines
+exceed threshold by ~0.8 percentage points).
+
+**For CLEAN and DECOY regimes, all 11 baselines pass.** The T2 v2
+counterbalancing invariants (name-frequency equalization, evidence-count parity,
+polarity balance, counterfactual pairs) work as intended for the primary
+reasoning regimes.
+
+**Recommendation:** Use CLEAN and DECOY items for primary ACH scaffolding
+analysis. Report results separately by regime. See AMENDMENT-001 for full
+details.
 
 ## Known Limitations
 
@@ -283,54 +324,58 @@ See [`docs/power_analysis.md`](./power_analysis.md) for:
 
 ```json
 {
-  "item_id": "t2_theft_001",
+  "id": "t2v2_clean_theft_alibi_0000",
   "regime": "CLEAN",
-  "scenario": "theft",
-  "narrative": "...",
-  "hypotheses": {
-    "H1": {
-      "name": "Alice",
-      "description": "Alice stole the laptop"
-    },
-    "H2": { ... },
-    "H3": { ... }
-  },
+  "narrative": "At Manufacturing Solutions Inc, a valuable confidential document set was stolen...",
+  "question": "Based on the available evidence, who is most likely responsible for the theft?",
+  "hypotheses": [
+    "Blake Rivera is responsible",
+    "Indigo Taylor is responsible",
+    "Finley Brooks is responsible"
+  ],
   "evidence": [
     {
-      "id": "E1",
-      "text": "...",
-      "supports": ["H1"],
-      "contradicts": [],
-      "credibility": "high"
-    },
-    ...
+      "id": "E001",
+      "content": "Blake Rivera claims to have been at Building C...",
+      "supports": [],
+      "contradicts": ["Blake Rivera"],
+      "diagnostic_value": "high"
+    }
   ],
-  "correct_hypothesis": "H1",
+  "gold_answer": "Finley Brooks is responsible",
+  "gold_reasoning": "...",
+  "source_precedence_rule": null,
   "metadata": {
-    "generation_seed": 42,
-    "template_version": "1.0",
-    "counterbalancing_group": "A"
+    "template": "theft_alibi",
+    "guilty_suspect": "Finley Brooks",
+    "guilty_position": 2,
+    "n_suspects": 3,
+    "n_evidence": 9,
+    "mechanism": "alibi_invalidation",
+    "name_frequencies": {"Blake Rivera": 6, "Indigo Taylor": 6, "Finley Brooks": 6}
   }
 }
 ```
 
 ### Field Descriptions
 
-- **item_id**: Unique identifier (format: `t2_{scenario}_{number}`)
+- **id**: Unique identifier (format: `t2v2_{regime}_{scenario}_{template}_{number}`)
 - **regime**: One of [CLEAN, DECOY, CONFLICT, INSUFFICIENT]
-- **scenario**: One of [theft, sabotage, data_breach, contamination]
-- **narrative**: Natural language description of the situation
-- **hypotheses**: Dictionary of hypothesis objects with name and description
-- **evidence**: List of evidence items with support/contradiction metadata
-- **correct_hypothesis**: Ground truth hypothesis ID
-- **metadata**: Generation parameters for reproducibility
+- **narrative**: Natural language description of the investigation scenario
+- **question**: The question posed to the model
+- **hypotheses**: List of hypothesis strings (e.g., "Name is responsible")
+- **evidence**: List of evidence objects with content, supports, contradicts, diagnostic_value
+- **gold_answer**: Ground truth answer string (matches one hypothesis or "Cannot be determined...")
+- **gold_reasoning**: Explanation of why the gold answer is correct
+- **source_precedence_rule**: For CONFLICT items, the rule for resolving source conflicts; null otherwise
+- **metadata**: Generation parameters including template, suspect details, and name frequencies
 
 ## Versioning and Updates
 
-### Current Version: 1.0.0
+### Current Version: 2.0.0
 
-**Release Date**: [To be filled]
-**Changes**: Initial release
+**Release Date**: 2026-08-24
+**Changes**: T2 v2 with counterbalancing invariants per AMENDMENT-001
 
 ### Future Updates
 
@@ -371,12 +416,18 @@ If you use the T2 dataset in research, please cite:
 
 ### Version 1.0.0 (Initial Release)
 
-- Generated [TBD] items across 4 regimes
-- 4 scenario templates implemented
-- Counterbalancing and leakage checks validated
-- Full data card and power analysis documentation
+- T2 v1 generator with basic counterbalancing
+- Invalidated by leakage battery (see AMENDMENT-001 for details)
+
+### Version 2.0.0 (T2 v2, AMENDMENT-001)
+
+- Generated 6,000 items across 4 regimes, 8 template families
+- Relational reasoning via structural rules (alibi-chain invalidation, temporal-sequence inconsistency, source-credibility cascade)
+- Counterbalancing invariants: name-frequency equalization, evidence-count parity, polarity balance, length matching, positional uniformity
+- Counterfactual minimal pairs with >85% token overlap
+- 11-baseline leakage battery: overall FAIL (INSUFFICIENT structural leak), CLEAN/DECOY PASS all 11 baselines
 
 ---
 
-**Document version**: 1.0
-**Last updated**: [To be filled]
+**Document version**: 2.0
+**Last updated**: 2026-08-24
