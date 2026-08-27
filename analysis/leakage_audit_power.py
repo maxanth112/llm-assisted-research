@@ -2,25 +2,24 @@
 """
 Joint-gate power simulation for the leakage equivalence audit.
 
-Computes P(ALL baselines pass simultaneously | true accuracy = chance)
-as a function of per-regime N, accounting for correlation between baselines.
+Phase A.2 rewrite.
 
-This addresses Work Item 3 from Phase A.1: the original AMENDMENT-002 section 3.2
-powered each baseline individually at 0.90, but the overall gate requires ALL
-baselines x regimes x splits to pass simultaneously. Under independence, the
-joint pass probability is the product of marginal pass probabilities, which
-can be far below 0.90 even when each individual baseline achieves 0.90.
+Computes P(ALL baselines x regimes pass simultaneously | true accuracy = chance)
+as a function of per-regime N.
 
-Key concepts:
-  - Gate: Wilson 95% CI upper bound <= chance + 0.05
-  - Under H0 (true acc = chance), PASS probability depends on N
-  - Joint gate: all K cells in {baseline x regime x split} must PASS
-  - With B=11 baselines, R=4 regimes, S=2 splits: K = 11*4*2 = 88 cells
-    (but not all independent — shared predictions, correlated baselines)
-  - Sensitivity analysis for baseline correlation rho = {0, 0.3, 0.6}
+Key improvements over Phase A.1:
+  * Exact binomial for rho=0 (closed-form, no Monte Carlo)
+  * Fixed integer seeds (no hash(regime))
+  * Fine N grid (step=25 from 100 to 3000)
+  * Block correlation structure (baselines within regime correlated,
+    baselines across regimes independent)
+  * Reports P(gate passes | true chance), not "H0"
+  * Aggregate cells: ALL baselines x ALL regimes simultaneously
+
+Gate: Wilson 95% CI upper bound <= chance + 0.05
 
 Usage:
-    python analysis/leakage_audit_power.py [--output FILE]
+    python analysis/leakage_audit_power.py [--quick] [--output FILE]
 """
 
 import json
@@ -29,6 +28,7 @@ import sys
 import time
 import numpy as np
 from typing import Tuple, Dict, List
+from scipy.stats import norm, binom
 
 
 def wilson_ci_upper(k: int, n: int, z: float = 1.96) -> float:
@@ -42,176 +42,155 @@ def wilson_ci_upper(k: int, n: int, z: float = 1.96) -> float:
     return min(1.0, c + m)
 
 
-def per_baseline_pass_prob(n: int, chance: float, alpha: float = 0.05,
-                           n_sims: int = 50000, seed: int = 42) -> float:
-    """Monte Carlo estimate of P(PASS | true accuracy = chance) for one baseline
-    on one regime/split cell with N items.
+def exact_marginal_pass_prob(n: int, chance: float, margin: float = 0.05) -> float:
+    """Exact P(PASS for one cell | true accuracy = chance).
 
-    PASS = Wilson CI upper <= chance + alpha.
-    Under H0, each item is correct with probability = chance.
+    PASS = Wilson CI upper <= chance + margin.
+    Under true accuracy = chance, k ~ Binomial(n, chance).
+    Sum P(k) over all k where Wilson CI upper <= threshold.
+
+    This is exact (no Monte Carlo) via scipy.stats.binom.
     """
-    rng = np.random.RandomState(seed)
-    threshold = chance + alpha
-    n_pass = 0
-    for _ in range(n_sims):
-        k = rng.binomial(n, chance)
+    threshold = chance + margin
+    pass_prob = 0.0
+    for k in range(n + 1):
         ci_upper = wilson_ci_upper(k, n)
         if ci_upper <= threshold:
-            n_pass += 1
-    return n_pass / n_sims
+            pass_prob += binom.pmf(k, n, chance)
+    return pass_prob
 
 
-def joint_gate_pass_prob_independent(
-    per_cell_probs: List[float]
+def exact_joint_pass_prob_independent(
+    marginal_probs: List[float],
 ) -> float:
     """Joint pass probability assuming independence: product of marginals."""
     p = 1.0
-    for pp in per_cell_probs:
+    for pp in marginal_probs:
         p *= pp
     return p
 
 
-def joint_gate_pass_prob_correlated(
-    per_cell_probs: List[float],
-    rho: float,
-    n_sims: int = 100000,
-    seed: int = 42
+def joint_pass_prob_block_correlated(
+    regime_marginals: Dict[str, float],
+    n_baselines: int,
+    rho_within: float,
+    n_sims: int = 200000,
+    seed: int = 42,
 ) -> float:
-    """Monte Carlo estimate of joint pass probability with equicorrelated
-    baseline pass/fail indicators.
+    """Monte Carlo estimate of joint pass probability with BLOCK correlation.
 
-    Model: each cell i has latent z_i = sqrt(rho)*W + sqrt(1-rho)*e_i
-    where W ~ N(0,1) is shared, e_i ~ N(0,1) are independent.
-    Cell i passes iff Phi(z_i) < per_cell_probs[i] (matching marginal).
+    Block structure: baselines WITHIN the same regime share correlation
+    rho_within, baselines ACROSS different regimes are independent.
 
-    This models equicorrelation rho between all cells.
+    For each regime r with marginal pass probability p_r:
+      latent_ij = sqrt(rho)*W_r + sqrt(1-rho)*e_ij
+      cell (r,j) passes iff Phi(latent_ij) < p_r
+
+    Joint = all cells across all regimes pass.
     """
-    if rho <= 0:
-        return joint_gate_pass_prob_independent(per_cell_probs)
-
-    from scipy.stats import norm
+    if rho_within <= 0:
+        # All independent
+        marginal_list = []
+        for regime, p_r in regime_marginals.items():
+            marginal_list.extend([p_r] * n_baselines)
+        return exact_joint_pass_prob_independent(marginal_list)
 
     rng = np.random.RandomState(seed)
-    K = len(per_cell_probs)
-    thresholds = np.array([norm.ppf(p) if p < 1.0 else 10.0 for p in per_cell_probs])
+    regimes = sorted(regime_marginals.keys())
+    n_regimes = len(regimes)
 
-    sqrt_rho = math.sqrt(rho)
-    sqrt_1mrho = math.sqrt(1 - rho)
+    # Precompute thresholds: Phi^{-1}(p_r) for each regime
+    thresholds = {}
+    for r in regimes:
+        p_r = regime_marginals[r]
+        thresholds[r] = norm.ppf(p_r) if p_r < 1.0 else 10.0
+
+    sqrt_rho = math.sqrt(rho_within)
+    sqrt_1mrho = math.sqrt(1 - rho_within)
 
     n_pass = 0
     for _ in range(n_sims):
-        W = rng.randn()
-        e = rng.randn(K)
-        z = sqrt_rho * W + sqrt_1mrho * e
-        if np.all(z <= thresholds):
+        all_pass = True
+        for r in regimes:
+            W_r = rng.randn()  # shared within regime
+            e = rng.randn(n_baselines)  # independent per baseline
+            z = sqrt_rho * W_r + sqrt_1mrho * e
+            if not np.all(z <= thresholds[r]):
+                all_pass = False
+                break  # early exit
+        if all_pass:
             n_pass += 1
+
     return n_pass / n_sims
 
 
 def compute_power_table(
     n_per_regime_range: List[int],
     n_baselines: int = 11,
-    n_regimes: int = 4,
-    chance_values: Dict[str, float] = None,
+    chance: float = 0.25,
+    regime_names: List[str] = None,
     rho_values: List[float] = None,
-    alpha: float = 0.05,
-    n_sims_marginal: int = 50000,
-    n_sims_joint: int = 100000,
+    margin: float = 0.05,
+    n_sims_joint: int = 200000,
     seed: int = 42,
 ) -> Dict:
     """Compute the joint-gate power table.
 
     For each per-regime N, compute:
-    1. Per-cell marginal pass probabilities
-    2. Joint pass probability under independence (rho=0)
-    3. Joint pass probability under equicorrelation (rho > 0)
+    1. Exact marginal pass probability (one cell)
+    2. Exact joint pass probability under independence (rho=0)
+    3. Monte Carlo joint pass probability under block correlation (rho > 0)
 
     Args:
-        n_per_regime_range: list of per-regime N values to evaluate
-        n_baselines: number of baselines in the gate
-        n_regimes: number of regimes
-        chance_values: per-regime chance levels (default: all 0.25 for v3 universal 4-option)
-        rho_values: correlation values for sensitivity analysis
-        alpha: equivalence margin
-        n_sims_marginal: simulations for marginal pass probability
-        n_sims_joint: simulations for joint pass probability
-
-    Returns:
-        dict with power table and metadata
+        n_per_regime_range: list of per-regime N values
+        n_baselines: number of baselines
+        chance: chance level (0.25 for universal 4-option)
+        regime_names: list of regime names
+        rho_values: within-regime baseline correlation values
+        margin: equivalence margin (0.05)
+        n_sims_joint: MC sims for correlated joint probability
+        seed: master seed
     """
-    if chance_values is None:
-        # v3 universal 4-option design: chance = 0.25 for all regimes
-        chance_values = {
-            "CLEAN": 0.25,
-            "DECOY": 0.25,
-            "CONFLICT": 0.25,
-            "INSUFFICIENT": 0.25,
-        }
+    if regime_names is None:
+        regime_names = ["CLEAN", "DECOY", "CONFLICT", "INSUFFICIENT"]
     if rho_values is None:
         rho_values = [0.0, 0.3, 0.6]
 
+    n_regimes = len(regime_names)
     results = []
     total = len(n_per_regime_range)
 
     for idx, n_per_regime in enumerate(n_per_regime_range):
         print(f"  N={n_per_regime} ({idx+1}/{total})...", file=sys.stderr)
 
-        # Compute per-cell marginal pass probabilities
-        # Each cell = (baseline, regime) on one split
-        # Under H0, all baselines on a given regime have the same P(PASS)
-        # because they all observe the same binomial(N, chance) correct count
-        # (well, not exactly — different baselines give different predictions,
-        # but under H0 each predicts at chance).
-        # However, the gate evaluates each baseline independently, so each
-        # baseline on each regime is a separate cell.
+        # Exact marginal pass probability (same for all regimes at same chance)
+        marginal = exact_marginal_pass_prob(n_per_regime, chance, margin)
 
-        # For the gate: each baseline/regime cell is evaluated on BOTH splits
-        # (held-out and audit). The held-out split has much larger N (template-
-        # held-out), so its pass probability is ~1.0. The audit split is the
-        # binding constraint.
-
-        # Simplification: model only the audit split (the held-out split
-        # passes with near-certainty for any reasonable N).
-        # K = n_baselines * n_regimes cells on the audit split.
-
-        per_cell_probs = []
-        regime_info = {}
-        for regime, chance in chance_values.items():
-            pp = per_baseline_pass_prob(
-                n_per_regime, chance, alpha,
-                n_sims=n_sims_marginal,
-                seed=seed + hash(regime) % 10000
-            )
-            regime_info[regime] = {
-                "n": n_per_regime,
-                "chance": chance,
-                "threshold": chance + alpha,
-                "marginal_pass_prob": round(pp, 5),
-            }
-            # Each baseline on this regime has the same marginal pass prob
-            for _ in range(n_baselines):
-                per_cell_probs.append(pp)
-
-        K = len(per_cell_probs)
+        # Per-regime marginals (all same under universal 4-option)
+        regime_marginals = {r: marginal for r in regime_names}
 
         # Joint pass probability for each rho
         rho_results = {}
         for rho in rho_values:
             if rho == 0:
-                joint_p = joint_gate_pass_prob_independent(per_cell_probs)
+                # Exact: product of marginals across all cells
+                n_cells = n_baselines * n_regimes
+                joint_p = marginal ** n_cells
             else:
-                joint_p = joint_gate_pass_prob_correlated(
-                    per_cell_probs, rho,
-                    n_sims=n_sims_joint,
-                    seed=seed + int(rho * 1000)
+                # Monte Carlo with block correlation
+                # Use fixed integer seed offset (no hash)
+                rho_seed = seed + int(rho * 1000) + idx * 7
+                joint_p = joint_pass_prob_block_correlated(
+                    regime_marginals, n_baselines, rho,
+                    n_sims=n_sims_joint, seed=rho_seed,
                 )
-            rho_results[f"rho_{rho:.1f}"] = round(joint_p, 5)
+            rho_results[f"rho_{rho:.1f}"] = round(joint_p, 6)
 
         results.append({
             "n_per_regime": n_per_regime,
             "total_audit_n": n_per_regime * n_regimes,
-            "n_cells": K,
-            "per_regime": regime_info,
+            "n_cells": n_baselines * n_regimes,
+            "marginal_pass_prob": round(marginal, 6),
             "joint_pass_prob": rho_results,
         })
 
@@ -236,28 +215,29 @@ def compute_power_table(
             else:
                 min_n_table[f"target_{target:.2f}"][rho_key] = {
                     "n_per_regime": None,
-                    "message": f"No N in range achieved joint power >= {target}"
+                    "message": f"No N in range achieved P(gate passes) >= {target}"
                 }
 
     return {
-        "description": "Joint-gate power simulation for leakage equivalence audit",
+        "description": "Joint-gate power: P(ALL baselines x regimes pass | true accuracy = chance)",
         "design": {
             "n_baselines": n_baselines,
             "n_regimes": n_regimes,
-            "n_splits_modeled": 1,  # audit split only (held-out ~1.0)
-            "chance_values": chance_values,
-            "alpha": alpha,
-            "gate": "Wilson 95% CI upper <= chance + alpha",
+            "regime_names": regime_names,
+            "chance": chance,
+            "margin": margin,
+            "gate": f"Wilson 95% CI upper <= {chance + margin:.2f}",
         },
-        "sensitivity": {
+        "correlation_model": {
             "rho_values": rho_values,
-            "note": "rho = equicorrelation between baseline pass/fail indicators",
+            "structure": "block: baselines within regime share rho, "
+                         "baselines across regimes independent",
         },
         "power_table": results,
         "minimum_n": min_n_table,
         "simulation_params": {
-            "n_sims_marginal": n_sims_marginal,
-            "n_sims_joint": n_sims_joint,
+            "rho_0_method": "exact binomial (closed-form)",
+            "rho_gt0_method": f"Monte Carlo ({n_sims_joint} sims per config)",
             "seed": seed,
         },
     }
@@ -268,40 +248,51 @@ def format_report(results: Dict) -> str:
     lines = []
     lines.append("# Leakage Audit Joint-Gate Power Simulation")
     lines.append("")
+    lines.append("P(ALL baselines x regimes pass simultaneously | true accuracy = chance)")
+    lines.append("")
     lines.append(f"**Baselines:** {results['design']['n_baselines']}")
-    lines.append(f"**Regimes:** {results['design']['n_regimes']}")
+    lines.append(f"**Regimes:** {results['design']['n_regimes']} "
+                 f"({', '.join(results['design']['regime_names'])})")
     lines.append(f"**Gate:** {results['design']['gate']}")
-    lines.append(f"**Alpha (margin):** {results['design']['alpha']}")
-    lines.append(f"**Chance (v3 universal 4-option):** 0.25 for all regimes")
+    lines.append(f"**Chance:** {results['design']['chance']} (v3 universal 4-option)")
+    lines.append(f"**Margin:** {results['design']['margin']}")
+    lines.append(f"**Total cells:** {results['design']['n_baselines']} x "
+                 f"{results['design']['n_regimes']} = "
+                 f"{results['design']['n_baselines'] * results['design']['n_regimes']}")
+    lines.append("")
+    lines.append(f"**Correlation model:** {results['correlation_model']['structure']}")
+    lines.append(f"**rho=0 method:** {results['simulation_params']['rho_0_method']}")
+    lines.append(f"**rho>0 method:** {results['simulation_params']['rho_gt0_method']}")
+    lines.append(f"**Seed:** {results['simulation_params']['seed']}")
     lines.append("")
 
     # Power table
-    lines.append("## Power Table: P(joint gate passes | H0)")
+    lines.append("## Power Table: P(gate passes | true accuracy = chance)")
     lines.append("")
-    rho_keys = [f"rho_{rho:.1f}" for rho in results['sensitivity']['rho_values']]
+    rho_values = results['correlation_model']['rho_values']
+    rho_keys = [f"rho_{rho:.1f}" for rho in rho_values]
     header = "| N/regime | Total N | Marginal P(PASS) | " + " | ".join(
-        f"Joint (rho={rho:.1f})" for rho in results['sensitivity']['rho_values']
+        f"Joint (rho={rho:.1f})" for rho in rho_values
     ) + " |"
-    sep = "|" + "|".join(["---"] * (4 + len(rho_keys))) + "|"
+    sep = "|" + "|".join(["---"] * (3 + len(rho_keys))) + "|"
     lines.append(header)
     lines.append(sep)
 
     for r in results['power_table']:
-        # Use first regime's marginal (all same under universal 4-option)
-        marginal = list(r['per_regime'].values())[0]['marginal_pass_prob']
-        joint_vals = [f"{r['joint_pass_prob'][k]:.4f}" for k in rho_keys]
+        marginal = r['marginal_pass_prob']
+        joint_vals = [f"{r['joint_pass_prob'][k]:.6f}" for k in rho_keys]
         lines.append(
-            f"| {r['n_per_regime']} | {r['total_audit_n']} | {marginal:.4f} | "
+            f"| {r['n_per_regime']} | {r['total_audit_n']} | {marginal:.6f} | "
             + " | ".join(joint_vals) + " |"
         )
 
     lines.append("")
 
     # Minimum N table
-    lines.append("## Minimum N for Target Joint Power")
+    lines.append("## Minimum N for Target P(gate passes)")
     lines.append("")
     lines.append("| Target | " + " | ".join(
-        f"rho={rho:.1f} (N/regime)" for rho in results['sensitivity']['rho_values']
+        f"rho={rho:.1f} (N/regime)" for rho in rho_values
     ) + " |")
     lines.append("|" + "|".join(["---"] * (1 + len(rho_keys))) + "|")
 
@@ -319,12 +310,14 @@ def format_report(results: Dict) -> str:
     lines.append("")
     lines.append("## Notes")
     lines.append("")
-    lines.append("- **Marginal P(PASS)** = probability one baseline on one regime passes")
-    lines.append("- **Joint** = probability ALL (baselines x regimes) pass simultaneously")
-    lines.append("- Under independence (rho=0), joint = marginal^K where K = baselines x regimes")
-    lines.append("- Positive correlation (rho>0) increases joint probability (failures cluster)")
-    lines.append("- Only the audit split is modeled; the held-out split passes with ~1.0 probability")
-    lines.append("- These results assume v3 universal 4-option design (chance=0.25 for all regimes)")
+    lines.append("- **Marginal P(PASS)**: probability that ONE baseline on ONE regime passes")
+    lines.append("- **Joint**: probability that ALL (baselines x regimes) pass simultaneously")
+    lines.append("- rho=0 (independence): exact binomial computation, no Monte Carlo")
+    lines.append("- rho>0: block correlation (within-regime baselines correlated, "
+                 "across-regime independent)")
+    lines.append("- Higher correlation increases joint probability (failures cluster)")
+    lines.append("- Only the audit split is modeled; held-out split passes with ~1.0")
+    lines.append("- v3 universal 4-option design: chance=0.25 for all regimes")
     lines.append("")
 
     return "\n".join(lines)
@@ -340,22 +333,24 @@ def main():
     t0 = time.time()
 
     if args.quick:
-        n_range = [100, 200, 300, 400, 500, 600, 800, 1000]
-        n_sims_m = 10000
-        n_sims_j = 20000
+        # Fine grid but fewer MC sims
+        n_range = list(range(100, 1001, 100)) + [1500, 2000]
+        n_sims_j = 50000
     else:
-        n_range = [100, 150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 1000, 1500]
-        n_sims_m = 50000
-        n_sims_j = 100000
+        # Fine grid from 100 to 3000
+        n_range = list(range(100, 501, 25)) + list(range(550, 1001, 50)) + \
+                  list(range(1100, 2001, 100)) + [2500, 3000]
+        n_sims_j = 200000
 
-    print(f"Running joint-gate power simulation...", file=sys.stderr)
+    print(f"Running joint-gate power simulation ({len(n_range)} N values)...",
+          file=sys.stderr)
     results = compute_power_table(
         n_per_regime_range=n_range,
         n_baselines=11,
-        n_regimes=4,
+        chance=0.25,
         rho_values=[0.0, 0.3, 0.6],
-        n_sims_marginal=n_sims_m,
         n_sims_joint=n_sims_j,
+        seed=42,
     )
 
     elapsed = time.time() - t0

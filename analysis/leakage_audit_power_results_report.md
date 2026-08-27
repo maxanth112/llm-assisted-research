@@ -1,40 +1,77 @@
 # Leakage Audit Joint-Gate Power Simulation
 
-**Baselines:** 11
-**Regimes:** 4
-**Gate:** Wilson 95% CI upper <= chance + alpha
-**Alpha (margin):** 0.05
-**Chance (v3 universal 4-option):** 0.25 for all regimes
+P(ALL baselines x regimes pass simultaneously | true accuracy = chance)
 
-## Power Table: P(joint gate passes | H0)
+**Baselines:** 11
+**Regimes:** 4 (CLEAN, DECOY, CONFLICT, INSUFFICIENT)
+**Gate:** Wilson 95% CI upper <= 0.30
+**Chance:** 0.25 (v3 universal 4-option)
+**Margin:** 0.05
+**Total cells:** 11 x 4 = 44
+
+**Correlation model:** block: baselines within regime share rho, baselines across regimes independent
+**rho=0 method:** exact binomial (closed-form)
+**rho>0 method:** Monte Carlo (200000 sims per config)
+**Seed:** 42
+
+## Power Table: P(gate passes | true accuracy = chance)
 
 | N/regime | Total N | Marginal P(PASS) | Joint (rho=0.0) | Joint (rho=0.3) | Joint (rho=0.6) |
-|---|---|---|---|---|---|---|
-| 500 | 2000 | 0.6770 | 0.0000 | 0.0184 | 0.1317 |
-| 750 | 3000 | 0.8640 | 0.0016 | 0.1360 | 0.3619 |
-| 1000 | 4000 | 0.9413 | 0.0690 | 0.3452 | 0.5823 |
-| 1500 | 6000 | 0.9917 | 0.6915 | 0.7994 | 0.8862 |
-| 2000 | 8000 | 0.9989 | 0.9515 | 0.9610 | 0.9765 |
-| 2500 | 10000 | 0.9999 | 0.9956 | 0.9959 | 0.9973 |
-| 3000 | 12000 | 1.0000 | 0.9996 | 0.9996 | 0.9997 |
-| 4000 | 16000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| 5000 | 20000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| 7500 | 30000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
-| 10000 | 40000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 |
+|---|---|---|---|---|---|
+| 100 | 400 | 0.211435 | 0.000000 | 0.000000 | 0.000000 |
+| 125 | 500 | 0.221383 | 0.000000 | 0.000000 | 0.000000 |
+| 150 | 600 | 0.227441 | 0.000000 | 0.000000 | 0.000005 |
+| 175 | 700 | 0.288683 | 0.000000 | 0.000000 | 0.000000 |
+| 200 | 800 | 0.345804 | 0.000000 | 0.000000 | 0.000005 |
+| 225 | 900 | 0.398449 | 0.000000 | 0.000000 | 0.000025 |
+| 250 | 1000 | 0.389420 | 0.000000 | 0.000000 | 0.000010 |
+| 275 | 1100 | 0.435368 | 0.000000 | 0.000000 | 0.000045 |
+| 300 | 1200 | 0.477848 | 0.000000 | 0.000000 | 0.000170 |
+| 325 | 1300 | 0.517029 | 0.000000 | 0.000000 | 0.000300 |
+| 350 | 1400 | 0.553120 | 0.000000 | 0.000010 | 0.000590 |
+| 375 | 1500 | 0.586347 | 0.000000 | 0.000010 | 0.001070 |
+| 400 | 1600 | 0.616932 | 0.000000 | 0.000035 | 0.001850 |
+| 425 | 1700 | 0.602854 | 0.000000 | 0.000025 | 0.001340 |
+| 450 | 1800 | 0.631052 | 0.000000 | 0.000015 | 0.002120 |
+| 475 | 1900 | 0.657162 | 0.000000 | 0.000095 | 0.003495 |
+| 500 | 2000 | 0.681337 | 0.000000 | 0.000220 | 0.005040 |
+| 550 | 2200 | 0.724454 | 0.000001 | 0.000595 | 0.010200 |
+| 600 | 2400 | 0.761459 | 0.000006 | 0.001810 | 0.018685 |
+| 650 | 2600 | 0.817853 | 0.000144 | 0.006720 | 0.044140 |
+| 700 | 2800 | 0.842270 | 0.000525 | 0.012485 | 0.063975 |
+| 750 | 3000 | 0.863235 | 0.001548 | 0.021135 | 0.088290 |
+| 800 | 3200 | 0.881272 | 0.003844 | 0.033985 | 0.117335 |
+| 850 | 3400 | 0.896817 | 0.008298 | 0.049955 | 0.148685 |
+| 900 | 3600 | 0.921889 | 0.027917 | 0.096925 | 0.223840 |
+| 950 | 3800 | 0.932042 | 0.045203 | 0.126720 | 0.264420 |
+| 1000 | 4000 | 0.940820 | 0.068278 | 0.161760 | 0.305565 |
+| 1100 | 4400 | 0.961115 | 0.174625 | 0.284235 | 0.437520 |
+| 1200 | 4800 | 0.970371 | 0.266236 | 0.372065 | 0.519705 |
+| 1300 | 5200 | 0.980531 | 0.421024 | 0.510205 | 0.633645 |
+| 1400 | 5600 | 0.987227 | 0.568002 | 0.632955 | 0.728115 |
+| 1500 | 6000 | 0.991629 | 0.690819 | 0.732710 | 0.803485 |
+| 1600 | 6400 | 0.994518 | 0.785155 | 0.811595 | 0.860310 |
+| 1700 | 6800 | 0.995779 | 0.830159 | 0.848385 | 0.887070 |
+| 1800 | 7200 | 0.997232 | 0.885176 | 0.896335 | 0.920900 |
+| 1900 | 7600 | 0.998186 | 0.923203 | 0.928615 | 0.946135 |
+| 2000 | 8000 | 0.998811 | 0.949003 | 0.951460 | 0.963015 |
+| 2500 | 10000 | 0.999880 | 0.994719 | 0.994965 | 0.995405 |
+| 3000 | 12000 | 0.999986 | 0.999364 | 0.999380 | 0.999495 |
 
-## Minimum N for Target Joint Power
+## Minimum N for Target P(gate passes)
 
 | Target | rho=0.0 (N/regime) | rho=0.3 (N/regime) | rho=0.6 (N/regime) |
 |---|---|---|---|
-| 0.80 | 2000 (total=8000) | 2000 (total=8000) | 1500 (total=6000) |
-| 0.90 | 2000 (total=8000) | 2000 (total=8000) | 2000 (total=8000) |
-| 0.95 | 2000 (total=8000) | 2000 (total=8000) | 2000 (total=8000) |
+| 0.80 | 1700 (total=6800) | 1600 (total=6400) | 1500 (total=6000) |
+| 0.90 | 1900 (total=7600) | 1900 (total=7600) | 1800 (total=7200) |
+| 0.95 | 2500 (total=10000) | 2000 (total=8000) | 2000 (total=8000) |
 
 ## Notes
 
-- **Marginal P(PASS)** = probability one baseline on one regime passes
-- **Joint** = probability ALL (baselines x regimes) pass simultaneously
-- Under independence (rho=0), joint = marginal^K where K = baselines x regimes
-- Positive correlation (rho>0) increases joint probability (failures cluster)
-- Only the audit split is modeled; the held-out split passes with ~1.0 probability
-- These results assume v3 universal 4-option design (chance=0.25 for all regimes)
+- **Marginal P(PASS)**: probability that ONE baseline on ONE regime passes
+- **Joint**: probability that ALL (baselines x regimes) pass simultaneously
+- rho=0 (independence): exact binomial computation, no Monte Carlo
+- rho>0: block correlation (within-regime baselines correlated, across-regime independent)
+- Higher correlation increases joint probability (failures cluster)
+- Only the audit split is modeled; held-out split passes with ~1.0
+- v3 universal 4-option design: chance=0.25 for all regimes

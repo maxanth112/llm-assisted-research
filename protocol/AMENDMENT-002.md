@@ -234,7 +234,7 @@ All v2 counterbalancing invariants are preserved:
 - Evidence-count parity per suspect
 - Clue-polarity balance (within ±1)
 - Counterfactual minimal pairs (Jaccard >= 0.85)
-- Positional uniformity (chi-squared p > 0.05)
+- Positional uniformity (per-regime position counts differ by at most 1)
 
 ---
 
@@ -273,33 +273,35 @@ achieves high pass probability.
 - Chance = 0.25 for all regimes (universal 4-option design)
 - Gate: Wilson 95% CI upper <= 0.25 + 0.05 = 0.30
 
-**Power table (P(joint gate passes | H0), Monte Carlo, 50k marginal / 100k joint):**
+**Power table (P(joint gate passes | true accuracy = chance), Phase A.2,
+rho=0 exact binomial, rho>0 MC 200k sims, block correlation):**
 
 | N/regime | Total N | Marginal P(PASS) | Joint (rho=0) | Joint (rho=0.3) | Joint (rho=0.6) |
 |----------|---------|------------------|---------------|-----------------|-----------------|
-| 500 | 2,000 | 0.677 | 0.000 | 0.018 | 0.132 |
-| 750 | 3,000 | 0.864 | 0.002 | 0.136 | 0.362 |
-| 1,000 | 4,000 | 0.941 | 0.069 | 0.345 | 0.582 |
-| 1,500 | 6,000 | 0.992 | 0.692 | 0.799 | 0.886 |
-| 2,000 | 8,000 | 0.999 | 0.952 | 0.961 | 0.977 |
-| 2,500 | 10,000 | 1.000 | 0.996 | 0.996 | 0.997 |
+| 500 | 2,000 | 0.681 | 0.000 | 0.000 | 0.005 |
+| 750 | 3,000 | 0.863 | 0.002 | 0.021 | 0.088 |
+| 1,000 | 4,000 | 0.941 | 0.068 | 0.162 | 0.306 |
+| 1,500 | 6,000 | 0.992 | 0.691 | 0.733 | 0.803 |
+| 2,000 | 8,000 | 0.999 | 0.949 | 0.951 | 0.963 |
+| 2,500 | 10,000 | 1.000 | 0.995 | 0.995 | 0.995 |
 
-**Minimum N for target joint power:**
+**Minimum N for target P(gate passes | true chance):**
 
 | Target | rho=0.0 | rho=0.3 | rho=0.6 |
 |--------|---------|---------|---------|
-| 0.80 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 1,500/regime (6,000 total) |
-| 0.90 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
-| 0.95 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
+| 0.80 | 1,700/regime (6,800 total) | 1,600/regime (6,400 total) | 1,500/regime (6,000 total) |
+| 0.90 | 1,900/regime (7,600 total) | 1,900/regime (7,600 total) | 1,800/regime (7,200 total) |
+| 0.95 | 2,500/regime (10,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
 
-**Sensitivity note:** rho represents equicorrelation between baseline pass/fail
-indicators. rho=0 assumes independence (conservative). rho=0.3-0.6 reflects
-plausible correlation where baselines share the same prediction errors on
-similar items. Higher correlation increases joint power (failures cluster
-rather than spreading).
+**Correlation model:** Block correlation — baselines WITHIN the same regime
+share rho, baselines ACROSS different regimes are independent. rho=0 uses
+exact binomial (closed-form, no Monte Carlo). rho>0 uses Monte Carlo with
+200k simulations per configuration.
 
-**Default target:** P(joint gate passes | H0) >= 0.90. This requires
-**2,000 items per regime (8,000 total)** regardless of assumed correlation.
+**Default target:** P(joint gate passes | true accuracy = chance) >= 0.90.
+This requires **1,900 items per regime (7,600 total)** under independence
+(conservative), or **1,800 per regime** under moderate block correlation
+(rho=0.6).
 
 The computed per-regime audit N is FROZEN before generating the fresh audit set.
 
