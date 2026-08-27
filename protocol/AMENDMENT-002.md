@@ -151,20 +151,35 @@ but does not block the audit gate.
 
 #### 2.5.2 Prohibited Surface-Form Shortcuts (GATE)
 
+*(Phase A.2 revision: all criteria are now deterministic / constructive.
+Chi-squared and KS non-rejection tests have been removed — "fails to reject"
+is not proof of balance, and KS becomes hypersensitive at large N.)*
+
 The following structural invariants are hard-gated. ANY violation on ANY
 item causes a FAIL:
 
-| # | Shortcut | Gate criterion |
-|---|----------|---------------|
+| # | Shortcut | Gate criterion (deterministic) |
+|---|----------|-------------------------------|
 | S1 | Option count | Every item has exactly 4 options, regardless of regime |
-| S2 | Abstention position | Abstention option ("Cannot be determined...") position is uniformly distributed over {0,1,2,3} per regime (chi-squared p > 0.05) |
+| S2 | Abstention position | Per regime, abstention position counts differ by AT MOST 1 (exact balance by construction) |
 | S3 | Abstention presence | Every item in every regime contains the abstention option |
-| S4 | Evidence count | Per-regime distribution of evidence counts does not differ (KS test p > 0.05 between each regime pair) |
-| S5 | Option text length | Per-regime distribution of mean option text length does not differ (KS test p > 0.05 between each regime pair) |
-| S6 | Gold-answer position | Gold answer position is uniformly distributed over {0,1,2,3} per regime (chi-squared p > 0.05) |
+| S4 | Evidence count | Per-regime evidence-count sorted multisets are identical (same regime size) or proportion differs by ≤ 0.05 (different regime sizes) |
+| S5 | Option text length | Per-regime mean option text length is within ±20% relative of the grand mean across all regimes |
+| S6 | Gold-answer position | Per regime, gold-answer position counts differ by AT MOST 1 (exact balance by construction) |
 
 These checks are deterministic and run before any classifier-based evaluation.
 They catch the structural leakage patterns that caused v2 INSUFFICIENT failures.
+
+**Rationale for deterministic criteria:**
+- S2/S6: The generator must produce items with exactly balanced position
+  assignments.  A chi-squared test can fail to reject severe imbalance at
+  small N, or reject trivial imbalance at large N.  The "max diff ≤ 1"
+  criterion is a verifiable construction property.
+- S4: Evidence-count distributions should match by design. The deterministic
+  criterion removes the KS test's N-dependence.
+- S5: A 20% relative band is a pre-specified practical equivalence margin.
+  Hypothesis text uses the same "[Name] is responsible" pattern across
+  regimes, so length should be comparable.
 
 #### 2.5.3 Regime-Identifying Vocabulary Test (DIAGNOSTIC, demoted from GATE)
 
