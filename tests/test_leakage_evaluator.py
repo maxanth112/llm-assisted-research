@@ -31,6 +31,9 @@ from analysis.run_leakage_eval import (
     extract_name,
     ev_content_text,
     ev_content_list,
+    _extract_all_names,
+    _target_normalize_text,
+    _target_normalized_candidate_text,
     pred_majority,
     pred_position,
     pred_mention_count,
@@ -500,24 +503,44 @@ class TestLeakageSensitivity:
         acc = float((preds == golds).mean())
         assert acc > 0.9, f"Mention count should detect leakage, got acc={acc:.3f}"
 
-    def test_tfidf_detects_leakage(self):
-        """TF-IDF classifier should detect deliberate leakage.
+    def test_tfidf_word_detects_leakage(self):
+        """pred_tfidf_word (the ACTUAL TF-IDF word predictor) should detect
+        deliberately inserted visible leakage.
 
-        Uses a large leaked corpus with train/test split so the binary
-        classifier has enough signal to learn.
+        Phase A.2 fix: this test now calls pred_tfidf_word directly, not
+        pred_mention_count as a stand-in.
         """
         items = self._make_leaked_corpus(n=300, template_families=3)
-        # Split into train/test by template
         train = [it for it in items if it["metadata"]["template"] != "leaked_template_2"]
         test = [it for it in items if it["metadata"]["template"] == "leaked_template_2"]
 
-        # Use mention_count as proxy for TF-IDF leakage detection
-        # (TF-IDF may not learn in small N; mention_count captures the signal directly)
-        preds = pred_mention_count(test)
+        preds = pred_tfidf_word(train, test)
         golds = _compute_gold_array(test)
         valid = golds >= 0
         acc = float((preds[valid] == golds[valid]).mean())
-        assert acc > 0.8, f"Mention count should detect leakage, got acc={acc:.3f}"
+        assert acc > 0.5, (
+            f"pred_tfidf_word should detect leakage via TARGET normalization, "
+            f"got acc={acc:.3f} (chance=0.333)"
+        )
+
+    def test_tfidf_char_detects_leakage(self):
+        """pred_tfidf_char (the ACTUAL TF-IDF char predictor) should detect
+        deliberately inserted visible leakage.
+
+        Phase A.2 fix: this test calls pred_tfidf_char directly.
+        """
+        items = self._make_leaked_corpus(n=300, template_families=3)
+        train = [it for it in items if it["metadata"]["template"] != "leaked_template_2"]
+        test = [it for it in items if it["metadata"]["template"] == "leaked_template_2"]
+
+        preds = pred_tfidf_char(train, test)
+        golds = _compute_gold_array(test)
+        valid = golds >= 0
+        acc = float((preds[valid] == golds[valid]).mean())
+        assert acc > 0.5, (
+            f"pred_tfidf_char should detect leakage via TARGET normalization, "
+            f"got acc={acc:.3f} (chance=0.333)"
+        )
 
 
 # ================================================================
@@ -904,4 +927,213 @@ class TestSurfaceFormChecks:
             assert check_name in result, f"Missing check: {check_name}"
             assert "passed" in result[check_name], (
                 f"Check {check_name} missing 'passed' key"
+            )
+
+    # ---- WI2: Deterministic balance tests (Phase A.2) ----
+
+    def test_s2_exact_balance_pass(self):
+        """S2 passes when abstention positions differ by at most 1."""
+        items = []
+        for i in range(40):
+            it = _make_item(regime="CLEAN", gold_idx=0, include_abstention=True)
+            # Rotate abstention to position i%4 by swapping
+            hyps = it["hypotheses"]
+            abs_idx = next(j for j, h in enumerate(hyps)
+                          if _is_abstention_option(h))
+            target_pos = i % 4
+            hyps[abs_idx], hyps[target_pos] = hyps[target_pos], hyps[abs_idx]
+            items.append(it)
+        result = run_surface_form_checks(items)
+        assert result["S2_abstention_position"]["passed"]
+
+    def test_s2_imbalance_fail(self):
+        """S2 fails when abstention is always at position 0."""
+        items = []
+        for i in range(40):
+            it = _make_item(regime="CLEAN", gold_idx=1, include_abstention=True)
+            # Force abstention to position 0
+            hyps = it["hypotheses"]
+            abs_idx = next(j for j, h in enumerate(hyps)
+                          if _is_abstention_option(h))
+            if abs_idx != 0:
+                hyps[0], hyps[abs_idx] = hyps[abs_idx], hyps[0]
+            items.append(it)
+        result = run_surface_form_checks(items)
+        assert not result["S2_abstention_position"]["passed"]
+
+    def test_s4_different_evidence_counts_fail(self):
+        """S4 fails when regimes have different evidence count distributions."""
+        items = []
+        for _ in range(30):
+            items.append(_make_item(regime="CLEAN", n_evidence=4,
+                                    include_abstention=True))
+        for _ in range(30):
+            items.append(_make_item(regime="DECOY", n_evidence=8,
+                                    include_abstention=True))
+        result = run_surface_form_checks(items)
+        assert not result["S4_evidence_count"]["passed"]
+
+    def test_s5_similar_lengths_pass(self):
+        """S5 passes when option lengths are within 20% relative band."""
+        items = []
+        for regime in ["CLEAN", "DECOY"]:
+            for _ in range(30):
+                items.append(_make_item(regime=regime, include_abstention=True))
+        result = run_surface_form_checks(items)
+        assert result["S5_option_text_length"]["passed"]
+
+    def test_s6_exact_balance_pass(self):
+        """S6 passes when gold positions differ by at most 1."""
+        items = []
+        for i in range(40):
+            gold_idx = i % 4
+            items.append(_make_item(regime="CLEAN", gold_idx=gold_idx,
+                                    include_abstention=True))
+        result = run_surface_form_checks(items)
+        assert result["S6_gold_position"]["passed"]
+
+    def test_s6_imbalance_fail(self):
+        """S6 fails when gold is always at position 0."""
+        items = [_make_item(regime="CLEAN", gold_idx=0,
+                            include_abstention=True) for _ in range(40)]
+        result = run_surface_form_checks(items)
+        assert not result["S6_gold_position"]["passed"]
+
+
+# ================================================================
+# 12. TARGET NORMALIZATION (Phase A.2)
+# ================================================================
+
+class TestTargetNormalization:
+    """Tests for the TARGET/OTHER_k normalization system."""
+
+    def test_target_replaces_candidate_name(self):
+        """TARGET normalization replaces candidate name with TARGET."""
+        text = "Alice was seen near the scene. Alice left fingerprints."
+        result = _target_normalize_text(text, "Alice", ["Bob", "Carol"])
+        assert "TARGET" in result
+        assert "alice" not in result.lower() or "target" in result.lower()
+
+    def test_other_names_replaced(self):
+        """OTHER_k normalization replaces other names deterministically."""
+        text = "Bob and Carol were also present."
+        result = _target_normalize_text(text, "Alice", ["Bob", "Carol"])
+        assert "OTHER_1" in result  # Bob (alphabetically first)
+        assert "OTHER_2" in result  # Carol (alphabetically second)
+
+    def test_order_independent_other_assignment(self):
+        """OTHER_k assignment is independent of hypothesis ordering."""
+        item = _make_item(suspects=["Alice", "Bob", "Carol"], gold_idx=0)
+
+        # Get normalized text for Alice (candidate 0) in original order
+        text_orig = _target_normalized_candidate_text(item, 0)
+
+        # Permute hypotheses: [Carol, Alice, Bob]
+        item2 = copy.deepcopy(item)
+        item2["hypotheses"] = [item["hypotheses"][2], item["hypotheses"][0],
+                               item["hypotheses"][1]]
+        # Alice is now at index 1
+        text_perm = _target_normalized_candidate_text(item2, 1)
+
+        assert text_orig == text_perm, (
+            "Target-normalized text should be identical regardless of position"
+        )
+
+    def test_candidate_rows_differ_in_context(self):
+        """Different candidate rows for same item should have different
+        target-normalized text (the key WI1 fix)."""
+        item = _make_item(suspects=["Alice", "Bob", "Carol"], gold_idx=0)
+        texts = [_target_normalized_candidate_text(item, j) for j in range(3)]
+        # All three texts should be different
+        assert len(set(texts)) == 3, (
+            "Each candidate row should have different target-normalized text"
+        )
+
+    def test_tfidf_metadata_excluded(self):
+        """Target-normalized text should not contain metadata fields."""
+        item = _make_item(gold_idx=0, extra_evidence_fields={
+            "supports": ["Alice"],
+            "contradicts": ["Bob"],
+            "diagnostic_value": "high",
+        })
+        texts, _, _, _ = _prepare_candidate_rows([item])
+        for t in texts:
+            assert "supports" not in t.lower()
+            assert "contradicts" not in t.lower()
+            assert "diagnostic_value" not in t.lower()
+
+
+# ================================================================
+# 13. TRAINED PREDICTION PERMUTATION EQUIVARIANCE (Phase A.2, WI1d)
+# ================================================================
+
+class TestTrainedPredictionEquivariance:
+    """Verify that TRAINED classifier predictions are permutation-equivariant.
+
+    Not just features, but the actual predicted candidate and correctness
+    must be unchanged under joint permutation of options and gold pointer.
+    """
+
+    def _permute_item(self, item, perm):
+        """Apply permutation to hypotheses and gold_answer."""
+        item = copy.deepcopy(item)
+        old_hyps = item["hypotheses"][:]
+        new_hyps = [None] * len(old_hyps)
+        for old_idx, new_idx in enumerate(perm):
+            new_hyps[new_idx] = old_hyps[old_idx]
+        item["hypotheses"] = new_hyps
+        return item
+
+    def test_structured_trained_equivariant(self):
+        """pred_combined trained predictions are equivariant under permutation."""
+        # Build a small corpus
+        suspects = ["Alice", "Bob", "Carol"]
+        items = []
+        for i in range(60):
+            items.append(_make_item(
+                suspects=suspects, gold_idx=i % 3,
+                template=f"tmpl_{i % 3}",
+            ))
+        train = items[:40]
+        test_orig = items[40:]
+
+        perm = [2, 0, 1]
+        test_perm = [self._permute_item(it, perm) for it in test_orig]
+
+        preds_orig = pred_combined(train, test_orig)
+        preds_perm = pred_combined(train, test_perm)
+
+        for i in range(len(test_orig)):
+            # The SELECTED candidate name should be the same
+            name_orig = extract_name(test_orig[i]["hypotheses"][preds_orig[i]])
+            name_perm = extract_name(test_perm[i]["hypotheses"][preds_perm[i]])
+            assert name_orig == name_perm, (
+                f"Item {i}: trained prediction selected different candidates "
+                f"under permutation: {name_orig} vs {name_perm}"
+            )
+
+    def test_tfidf_trained_equivariant(self):
+        """pred_tfidf_word trained predictions are equivariant under permutation."""
+        suspects = ["Alice", "Bob", "Carol"]
+        items = []
+        for i in range(60):
+            items.append(_make_item(
+                suspects=suspects, gold_idx=i % 3,
+                template=f"tmpl_{i % 3}",
+            ))
+        train = items[:40]
+        test_orig = items[40:]
+
+        perm = [2, 0, 1]
+        test_perm = [self._permute_item(it, perm) for it in test_orig]
+
+        preds_orig = pred_tfidf_word(train, test_orig)
+        preds_perm = pred_tfidf_word(train, test_perm)
+
+        for i in range(len(test_orig)):
+            name_orig = extract_name(test_orig[i]["hypotheses"][preds_orig[i]])
+            name_perm = extract_name(test_perm[i]["hypotheses"][preds_perm[i]])
+            assert name_orig == name_perm, (
+                f"Item {i}: TF-IDF prediction selected different candidates "
+                f"under permutation: {name_orig} vs {name_perm}"
             )

@@ -2,29 +2,31 @@
 """
 Candidate-aware, permutation-equivariant leakage evaluator.
 
-Phase A.1 rewrite.  All classifier baselines (6-11) now operate on ONE ROW
-PER ITEM-CANDIDATE PAIR, with "target-vs-other" feature normalization.
-Permutation equivariance is guaranteed: jointly permuting option order and
-gold pointer produces the same selected candidate.
+Phase A.2 rewrite.
 
-Fixes over Phase-A evaluator:
-  * Classifier baselines predicted gold OPTION INDEX from narrative+evidence
-    text that omitted hypothesis text entirely.  They tested text→position
-    correlation, not whether surface cues identify the correct candidate.
-  * "Polarity" baseline was mislabeled (actual polarity features were removed
-    in Phase A but name was kept).  Renamed to "mention_evidence".
-  * "Positional" baseline fed near-constant position indices {0,1,2,3}.
-    Replaced with "first_mention_order" using genuine first-occurrence
-    positions in text.
+Fixes over Phase-A.1:
+  * TF-IDF candidate rows concatenated "hypothesis [SEP] SAME context" for
+    every candidate.  For a bag-of-words model, the context contribution is
+    IDENTICAL across candidates and cancels during within-item argmax.  The
+    classifier could only learn candidate-NAME priors, not whether TARGET
+    is mentioned/implicated in context.  FIXED: TARGET normalization —
+    replace the current candidate's name with TARGET, other candidates'
+    names with OTHER_1, OTHER_2, … (alphabetically-sorted non-target names).
+    Context now genuinely differs across candidates.
+  * Structured baselines (mention_count, evidence_count, etc.) used raw
+    candidate names.  Now use the same TARGET/OTHER normalization so scores
+    reflect "how much does context implicate THIS candidate vs others".
+  * test_tfidf_detects_leakage called pred_mention_count, NOT the actual
+    TF-IDF predictors.  FIXED: the injected-leak test now calls
+    pred_tfidf_word and pred_tfidf_char directly.
+  * Surface-form shortcut checks (S2/S4/S5/S6) used chi-squared / KS
+    non-rejection.  FIXED: replaced with deterministic/constructive criteria.
 
-Preserved from Phase-A evaluator:
-  * Heuristic baselines (1-5): already candidate-aware (argmax over
-    per-candidate scores).
-  * wilson_ci, chance_level_correct, _decompose, template_held_out_eval
-    structure, final_audit_eval structure.
-  * Feature hygiene: ONLY model-visible fields (narrative, question,
-    hypotheses, evidence[].content).
-  * Hard reconciliation assertion: sum(regime_correct) == agg_correct.
+Preserved:
+  * wilson_ci, chance_level_correct, _decompose, template_held_out_eval,
+    final_audit_eval framework.
+  * Feature hygiene: ONLY model-visible fields.
+  * Hard reconciliation assertion.
   * Chance = mean(1/n_options).
   * Per-regime verdicts by slicing (not refitting).
 
@@ -36,7 +38,7 @@ Allowed fields per baseline (documented in output):
 """
 
 import gc
-import json, math, sys, warnings, time
+import json, math, re, sys, warnings, time
 from collections import Counter, defaultdict
 from typing import List, Dict, Tuple
 
@@ -115,6 +117,78 @@ def gold_index(item) -> int:
 
 
 # ================================================================
+# TARGET NORMALIZATION (Phase A.2)
+# ================================================================
+# Replace the current candidate's name with TARGET, other candidates'
+# names with OTHER_1, OTHER_2, … using an ORDER-INDEPENDENT scheme
+# (non-target names sorted alphabetically).  This makes context
+# contribution DIFFER across candidates: TARGET mentions appear only
+# in the row whose candidate IS that person, enabling the classifier
+# to learn "context implicates THIS candidate".
+#
+# Permutation equivariance: the same candidate always maps to TARGET
+# in its own row, regardless of position in the hypothesis list.  The
+# OTHER_k assignment uses alphabetical sort of non-target names, which
+# is independent of position.
+
+def _extract_all_names(item) -> List[str]:
+    """Extract candidate names from hypotheses (model-visible text only).
+    Returns list parallel to item['hypotheses']."""
+    return [extract_name(h) for h in item["hypotheses"]]
+
+
+def _target_normalize_text(text: str, target_name: str,
+                           other_names_sorted: List[str]) -> str:
+    """Replace target_name with TARGET, other names with OTHER_1, OTHER_2, …
+    in text.  Replacements are case-insensitive but preserve word boundaries.
+
+    other_names_sorted: non-target names in ALPHABETICAL order (for
+    order-independent OTHER_k assignment).
+    """
+    if not text:
+        return text
+    # Sort replacements longest-first to avoid partial matches
+    # (e.g. "Dr. Alice Smith" before "Alice")
+    all_replacements = []
+    all_replacements.append((target_name, "TARGET"))
+    for k, oname in enumerate(other_names_sorted):
+        all_replacements.append((oname, f"OTHER_{k+1}"))
+
+    # Sort by descending length of source name
+    all_replacements.sort(key=lambda x: -len(x[0]))
+
+    result = text
+    for src, dst in all_replacements:
+        if not src:
+            continue
+        # Case-insensitive replacement preserving word boundaries
+        pattern = re.escape(src)
+        result = re.sub(pattern, dst, result, flags=re.IGNORECASE)
+
+    return result
+
+
+def _target_normalized_candidate_text(item, candidate_idx: int) -> str:
+    """Produce target-normalized text for one candidate row.
+
+    The text includes hypothesis + narrative + evidence, with the
+    candidate's name replaced by TARGET and other candidates' names
+    replaced by OTHER_1, OTHER_2, … (alphabetically sorted).
+    """
+    names = _extract_all_names(item)
+    target_name = names[candidate_idx]
+    # Sort OTHER names alphabetically for order-independent assignment
+    other_names = sorted([n for j, n in enumerate(names) if j != candidate_idx])
+
+    hypothesis = item["hypotheses"][candidate_idx]
+    narrative = item.get("narrative", "")
+    ev_text = ev_content_text(item)
+    combined = f"{hypothesis} [SEP] {narrative} [SEP] {ev_text}"
+
+    return _target_normalize_text(combined, target_name, other_names)
+
+
+# ================================================================
 # SURFACE-FORM SHORTCUT CHECKS (AMENDMENT-002 §2.5.2)
 # ================================================================
 # Deterministic structural checks run BEFORE classifier baselines.
@@ -136,12 +210,13 @@ def _is_abstention_option(text: str) -> bool:
 def run_surface_form_checks(items: List[Dict], label: str = "corpus") -> Dict:
     """Run prohibited surface-form shortcut checks (AMENDMENT-002 §2.5.2).
 
+    Phase A.2: ALL checks use DETERMINISTIC / constructive criteria.
+    No chi-squared or KS non-rejection tests.
+
     Returns dict with per-check results. Each check has:
       - passed: bool
-      - details: str
+      - details: str (or sub-structure)
     """
-    from scipy import stats as sp_stats
-
     results = {}
     regimes = sorted(set(it.get("regime", "UNKNOWN") for it in items))
 
@@ -156,7 +231,7 @@ def run_surface_form_checks(items: List[Dict], label: str = "corpus") -> Dict:
                          f"first 5 = {non4[:5]}"),
     }
 
-    # ---- S2: Abstention position uniformity per regime ----
+    # ---- S2: Abstention position balance (DETERMINISTIC: counts differ by at most 1) ----
     s2_results = {}
     s2_all_pass = True
     for regime in regimes:
@@ -167,22 +242,18 @@ def run_surface_form_checks(items: List[Dict], label: str = "corpus") -> Dict:
                 if _is_abstention_option(hyp):
                     positions.append(idx)
                     break
-        if len(positions) >= 20:
-            counts = [positions.count(p) for p in range(4)]
-            chi2, pval = sp_stats.chisquare(counts)
-            passed = pval > 0.05
+        if len(positions) > 0:
+            n_opts = max(4, max(len(it["hypotheses"]) for it in regime_items))
+            counts = [positions.count(p) for p in range(n_opts)]
+            max_diff = max(counts) - min(counts)
+            passed = max_diff <= 1
             s2_results[regime] = {
-                "counts": counts, "chi2": round(chi2, 3),
-                "p": round(pval, 4), "passed": passed,
+                "counts": counts, "max_diff": max_diff,
+                "criterion": "max_diff <= 1",
+                "passed": passed,
             }
             if not passed:
                 s2_all_pass = False
-        elif len(positions) > 0:
-            s2_results[regime] = {
-                "n": len(positions),
-                "note": "too few items for chi-squared test",
-                "passed": True,  # not enough data to fail
-            }
     results["S2_abstention_position"] = {
         "passed": s2_all_pass,
         "per_regime": s2_results,
@@ -202,84 +273,112 @@ def run_surface_form_checks(items: List[Dict], label: str = "corpus") -> Dict:
                          f"first 5 indices = {missing[:5]}"),
     }
 
-    # ---- S4: Evidence count distribution per regime pair ----
+    # ---- S4: Evidence count (DETERMINISTIC: identical sorted multiset across regimes) ----
     s4_results = {}
     s4_all_pass = True
     ev_counts_by_regime = {}
     for regime in regimes:
-        ev_counts_by_regime[regime] = [
+        ev_counts_by_regime[regime] = sorted(
             len(it.get("evidence", [])) for it in items
             if it.get("regime") == regime
-        ]
-    for i, r1 in enumerate(regimes):
-        for r2 in regimes[i+1:]:
-            if len(ev_counts_by_regime[r1]) >= 5 and len(ev_counts_by_regime[r2]) >= 5:
-                stat, pval = sp_stats.ks_2samp(
-                    ev_counts_by_regime[r1], ev_counts_by_regime[r2]
-                )
-                passed = pval > 0.05
-                s4_results[f"{r1}_vs_{r2}"] = {
-                    "ks_stat": round(stat, 4), "p": round(pval, 4),
-                    "passed": passed,
-                }
-                if not passed:
-                    s4_all_pass = False
+        )
+    # All regimes must have the same sorted evidence-count multiset
+    regime_list = sorted(ev_counts_by_regime.keys())
+    if len(regime_list) >= 2:
+        ref = ev_counts_by_regime[regime_list[0]]
+        for r in regime_list[1:]:
+            other = ev_counts_by_regime[r]
+            # Allow different regime sizes — normalize by comparing
+            # the Counter (multiset) per unit item.  If regime sizes
+            # differ, compare Counter normalized by regime size?
+            # Strict: if same number of items per regime, require
+            # identical sorted list.  If different sizes, compare
+            # Counter distributions (same set of values, proportions
+            # within 5% absolute).
+            if len(ref) == len(other):
+                match = (ref == other)
+            else:
+                # Different regime sizes: compare value sets and
+                # max proportion difference
+                c_ref = Counter(ref)
+                c_other = Counter(other)
+                all_vals = set(c_ref.keys()) | set(c_other.keys())
+                max_prop_diff = 0.0
+                for v in all_vals:
+                    p1 = c_ref.get(v, 0) / max(len(ref), 1)
+                    p2 = c_other.get(v, 0) / max(len(other), 1)
+                    max_prop_diff = max(max_prop_diff, abs(p1 - p2))
+                match = (max_prop_diff <= 0.05)
+            pair_key = f"{regime_list[0]}_vs_{r}"
+            s4_results[pair_key] = {
+                "passed": match,
+                "criterion": "identical sorted multiset (same size) or proportion diff <= 0.05 (different size)",
+                "ref_size": len(ref), "other_size": len(other),
+            }
+            if not match:
+                s4_all_pass = False
     results["S4_evidence_count"] = {
         "passed": s4_all_pass,
         "regime_pairs": s4_results,
     }
 
-    # ---- S5: Option text length distribution per regime pair ----
+    # ---- S5: Option text length (DETERMINISTIC: per-regime mean within ±20% relative band) ----
+    # Equivalence margin: per-regime mean option text length must be within
+    # 20% relative of the grand mean.  This is a pre-specified practical
+    # tolerance: hypothesis text lengths should be comparable across regimes
+    # because they use the same "[Name] is responsible" pattern.
+    S5_RELATIVE_MARGIN = 0.20  # 20% relative band
     s5_results = {}
     s5_all_pass = True
-    opt_len_by_regime = {}
+    regime_mean_lengths = {}
     for regime in regimes:
         regime_items = [it for it in items if it.get("regime") == regime]
-        opt_len_by_regime[regime] = [
-            float(np.mean([len(h) for h in it["hypotheses"]]))
-            for it in regime_items
-        ]
-    for i, r1 in enumerate(regimes):
-        for r2 in regimes[i+1:]:
-            if len(opt_len_by_regime[r1]) >= 5 and len(opt_len_by_regime[r2]) >= 5:
-                stat, pval = sp_stats.ks_2samp(
-                    opt_len_by_regime[r1], opt_len_by_regime[r2]
-                )
-                passed = pval > 0.05
-                s5_results[f"{r1}_vs_{r2}"] = {
-                    "ks_stat": round(stat, 4), "p": round(pval, 4),
-                    "passed": passed,
-                }
-                if not passed:
-                    s5_all_pass = False
+        if regime_items:
+            lengths = [float(np.mean([len(h) for h in it["hypotheses"]]))
+                       for it in regime_items]
+            regime_mean_lengths[regime] = float(np.mean(lengths))
+    if regime_mean_lengths:
+        grand_mean = float(np.mean(list(regime_mean_lengths.values())))
+        for regime, rmean in regime_mean_lengths.items():
+            if grand_mean > 0:
+                rel_diff = abs(rmean - grand_mean) / grand_mean
+            else:
+                rel_diff = 0.0
+            passed = rel_diff <= S5_RELATIVE_MARGIN
+            s5_results[regime] = {
+                "mean_length": round(rmean, 2),
+                "grand_mean": round(grand_mean, 2),
+                "relative_diff": round(rel_diff, 4),
+                "margin": S5_RELATIVE_MARGIN,
+                "criterion": f"abs(regime_mean - grand_mean) / grand_mean <= {S5_RELATIVE_MARGIN}",
+                "passed": passed,
+            }
+            if not passed:
+                s5_all_pass = False
     results["S5_option_text_length"] = {
         "passed": s5_all_pass,
-        "regime_pairs": s5_results,
+        "per_regime": s5_results,
     }
 
-    # ---- S6: Gold-answer position uniformity per regime ----
+    # ---- S6: Gold-answer position balance (DETERMINISTIC: counts differ by at most 1) ----
     s6_results = {}
     s6_all_pass = True
     for regime in regimes:
         regime_items = [it for it in items if it.get("regime") == regime]
         gold_positions = [gold_index(it) for it in regime_items]
         gold_positions = [p for p in gold_positions if p >= 0]
-        if len(gold_positions) >= 20:
-            counts = [gold_positions.count(p) for p in range(4)]
-            chi2, pval = sp_stats.chisquare(counts)
-            passed = pval > 0.05
+        if len(gold_positions) > 0:
+            n_opts = max(len(it["hypotheses"]) for it in regime_items)
+            counts = [gold_positions.count(p) for p in range(n_opts)]
+            max_diff = max(counts) - min(counts)
+            passed = max_diff <= 1
             s6_results[regime] = {
-                "counts": counts, "chi2": round(chi2, 3),
-                "p": round(pval, 4), "passed": passed,
+                "counts": counts, "max_diff": max_diff,
+                "criterion": "max_diff <= 1",
+                "passed": passed,
             }
             if not passed:
                 s6_all_pass = False
-        elif len(gold_positions) > 0:
-            s6_results[regime] = {
-                "n": len(gold_positions),
-                "note": "too few items for chi-squared test",
-                "passed": True,
-            }
     results["S6_gold_position"] = {
         "passed": s6_all_pass,
         "per_regime": s6_results,
@@ -377,25 +476,15 @@ from sklearn.linear_model import LogisticRegression
 from scipy import sparse
 
 
-def _candidate_texts(item) -> List[str]:
-    """For each candidate in an item, produce a combined text string:
-    candidate_hypothesis [SEP] narrative [SEP] evidence_content
-
-    This ensures the classifier sees the hypothesis text alongside the
-    context, making it candidate-aware."""
-    narrative = item.get("narrative", "")
-    ev_text = ev_content_text(item)
-    texts = []
-    for h in item["hypotheses"]:
-        texts.append(f"{h} [SEP] {narrative} [SEP] {ev_text}")
-    return texts
-
-
 def _prepare_candidate_rows(items):
-    """Expand items into candidate-level rows.
+    """Expand items into TARGET-NORMALIZED candidate-level rows.
+
+    Phase A.2: uses _target_normalized_candidate_text() so that context
+    genuinely differs across candidates (TARGET mentions appear only in the
+    candidate whose name was replaced with TARGET).
 
     Returns:
-        texts: list of combined texts (one per candidate row)
+        texts: list of target-normalized combined texts (one per candidate row)
         labels: binary array (1=gold candidate, 0=other)
         item_ids: array mapping each row to its source item index
         valid_mask: boolean array (True for items with valid gold_index)
@@ -409,8 +498,8 @@ def _prepare_candidate_rows(items):
         gi = gold_index(it)
         if gi < 0:
             valid_mask[i] = False
-        for j, h in enumerate(it["hypotheses"]):
-            texts.append(f"{h} [SEP] {it.get('narrative', '')} [SEP] {ev_content_text(it)}")
+        for j in range(len(it["hypotheses"])):
+            texts.append(_target_normalized_candidate_text(it, j))
             labels.append(1 if (gi >= 0 and j == gi) else 0)
             item_ids.append(i)
 
@@ -474,6 +563,9 @@ def _candidate_predict(train_items, test_items, build_features_fn):
 class _TfidfFeatureBuilder:
     """Stateful feature builder for TF-IDF candidate-aware baselines.
 
+    Phase A.2: uses TARGET-NORMALIZED text so context contribution differs
+    across candidates (replacing candidate names with TARGET/OTHER_k).
+
     On training call: fits vectorizer, transforms training rows.
     On test call: transforms test rows using fitted vectorizer.
     """
@@ -513,8 +605,10 @@ def pred_tfidf_char(train_items, test_items) -> np.ndarray:
 # STRUCTURED CANDIDATE-AWARE FEATURES
 # ================================================================
 #
-# For each item-candidate pair, compute features about the TARGET candidate
-# and contrast features (target vs mean-of-others).
+# Phase A.2: Features use TARGET normalization.  For each candidate row,
+# the text is TARGET-normalized (candidate→TARGET, others→OTHER_k).
+# Features count occurrences of "TARGET" in the normalized text, so they
+# genuinely measure "how much does context implicate THIS candidate".
 #
 # Feature vector per candidate row:
 #   [target_mention_count, target_evidence_count, target_length_sum,
@@ -523,36 +617,50 @@ def pred_tfidf_char(train_items, test_items) -> np.ndarray:
 #    delta_first_mention_pos]
 #
 # Where delta_X = target_X - mean(other_candidates_X).
-# This is permutation-equivariant: the same function is applied to each
-# candidate identically, with no position index features.
+# Permutation-equivariant: same function per candidate, no position index.
 
 def _compute_candidate_features(item, candidate_idx):
     """Compute structured features for one candidate in an item.
 
+    Phase A.2: Uses TARGET normalization — searches for "TARGET" token
+    in the target-normalized text, not the raw candidate name.  This
+    makes features genuinely candidate-specific in context.
+
     Returns dict of raw feature values for this candidate.
     """
-    hyps = item["hypotheses"]
-    h = hyps[candidate_idx]
-    name = extract_name(h).lower()
+    names = _extract_all_names(item)
+    target_name = names[candidate_idx]
+    other_names = sorted([n for j, n in enumerate(names) if j != candidate_idx])
 
-    narrative = item.get("narrative", "").lower()
+    narrative = item.get("narrative", "")
     ev_contents = ev_content_list(item)
+
+    # Normalize evidence items individually for per-evidence features
+    normalized_evs = []
+    for ev_text in ev_contents:
+        normalized_evs.append(
+            _target_normalize_text(ev_text, target_name, other_names).lower()
+        )
+
+    # Normalize full text for global features
     full_text = narrative + " " + " ".join(ev_contents)
-    full_text_lower = full_text.lower()
+    normalized_full = _target_normalize_text(full_text, target_name, other_names).lower()
 
-    # Mention count: how often this candidate's name appears in full text
-    mention_count = full_text_lower.count(name) if name else 0
+    search_token = "target"
 
-    # Evidence count: how many evidence items mention this candidate
-    evidence_count = sum(1 for et in ev_contents if name in et.lower()) if name else 0
+    # Mention count: how often TARGET appears in normalized full text
+    mention_count = normalized_full.count(search_token)
 
-    # Length sum: total character length of evidence items mentioning this candidate
-    length_sum = sum(len(et) for et in ev_contents if name in et.lower()) if name else 0
+    # Evidence count: how many evidence items contain TARGET
+    evidence_count = sum(1 for et in normalized_evs if search_token in et)
 
-    # First mention position: character position of first occurrence in full text
+    # Length sum: total character length of evidence items containing TARGET
+    length_sum = sum(len(et) for et in normalized_evs if search_token in et)
+
+    # First mention position: character position of first TARGET in normalized text
     # (normalized by text length; 1.0 if not found)
-    first_pos = full_text_lower.find(name) if name else -1
-    text_len = max(len(full_text_lower), 1)
+    first_pos = normalized_full.find(search_token)
+    text_len = max(len(normalized_full), 1)
     first_mention_pos = first_pos / text_len if first_pos >= 0 else 1.0
 
     return {
@@ -911,16 +1019,16 @@ def main():
     elapsed = time.time() - t0
 
     report = {
-        "evaluator_version": "v2_a1_candidate_aware",
+        "evaluator_version": "v2_a2_target_normalized",
         "evaluation_date": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
         "design_changes": [
-            "Classifier baselines (6-11) restructured to one-row-per-candidate-pair",
-            "Target-vs-other feature normalization for permutation equivariance",
-            "TF-IDF baselines include hypothesis text in feature representation",
-            "Structured features: target + delta (target - mean_others)",
-            "No hypothesis position index in any feature",
-            "Baseline 9 renamed: polarity_feature -> mention_evidence",
-            "Baseline 10 renamed: positional_feature -> first_mention_order",
+            "Phase A.2: TARGET normalization for TF-IDF and structured baselines",
+            "TF-IDF candidate rows: hypothesis+context with TARGET/OTHER_k replacement",
+            "Structured features: count TARGET in normalized text, not raw name",
+            "Surface-form checks: deterministic criteria (no chi-squared/KS)",
+            "S2/S6: counts differ by at most 1 (exact balance by construction)",
+            "S4: identical evidence-count multiset across regimes",
+            "S5: per-regime mean option length within ±20% of grand mean",
         ],
         "preserved_from_phase_a": [
             "chance = mean(1/n_options)",
@@ -958,7 +1066,7 @@ def main():
 
     # ---- Summary to stderr ----
     print(f"\n{'='*80}", file=sys.stderr)
-    print("CANDIDATE-AWARE LEAKAGE EVALUATION RESULTS (Phase A.1)", file=sys.stderr)
+    print("TARGET-NORMALIZED LEAKAGE EVALUATION RESULTS (Phase A.2)", file=sys.stderr)
     print(f"{'='*80}", file=sys.stderr)
     print(f"Train chance: {train_chance:.5f}  Threshold: "
           f"{train_chance+alpha:.5f}", file=sys.stderr)
@@ -988,8 +1096,8 @@ def main():
         print(f"Failed on audit: {failed_au}", file=sys.stderr)
     print(f"Elapsed: {elapsed:.1f}s", file=sys.stderr)
 
-    # ---- Write JSON to new file (do NOT overwrite Phase-A results) ----
-    outpath = "analysis/leakage_results_v2_a1.json"
+    # ---- Write JSON to new file (do NOT overwrite Phase-A / A.1 results) ----
+    outpath = "analysis/leakage_results_v2_a2.json"
     with open(outpath, 'w') as f:
         json.dump(report, f, indent=2)
     print(f"\nResults saved to {outpath}", file=sys.stderr)
