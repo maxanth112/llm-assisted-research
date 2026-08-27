@@ -137,20 +137,80 @@ Evidence item lengths are matched across suspects within each item with a
 tighter tolerance than v2, to eliminate the residual length imbalance
 observed in v2 CONFLICT items.
 
-### 2.5 Template-Cue and Regime-Vocabulary Tests
+### 2.5 Template-Cue, Surface-Form, and Regime-Vocabulary Tests
 
-Two additional leakage tests are added to the battery:
+Three categories of additional leakage tests are added:
 
-1. **Template-family classifier:** Can a classifier predict which template
-   family generated an item from model-visible text alone? If so, template
-   cues leak structural information. (This is evaluated but not gated —
-   it is an informational diagnostic.)
+#### 2.5.1 Template-Family Classifier (DIAGNOSTIC)
 
-2. **Regime-identifying vocabulary test:** After removing suspect names,
-   can a TF-IDF classifier predict the regime from the remaining text?
-   If regime is identifiable from vocabulary, the generator's regime-specific
-   language patterns leak. **Gate:** CI upper bound for regime-classification
-   accuracy must be <= 0.25 + 0.05 = 0.30.
+Can a classifier predict which template family generated an item from
+model-visible text alone? If so, template cues leak structural information.
+
+**Status:** Informational diagnostic (not gated). Reported for transparency
+but does not block the audit gate.
+
+#### 2.5.2 Prohibited Surface-Form Shortcuts (GATE)
+
+The following structural invariants are hard-gated. ANY violation on ANY
+item causes a FAIL:
+
+| # | Shortcut | Gate criterion |
+|---|----------|---------------|
+| S1 | Option count | Every item has exactly 4 options, regardless of regime |
+| S2 | Abstention position | Abstention option ("Cannot be determined...") position is uniformly distributed over {0,1,2,3} per regime (chi-squared p > 0.05) |
+| S3 | Abstention presence | Every item in every regime contains the abstention option |
+| S4 | Evidence count | Per-regime distribution of evidence counts does not differ (KS test p > 0.05 between each regime pair) |
+| S5 | Option text length | Per-regime distribution of mean option text length does not differ (KS test p > 0.05 between each regime pair) |
+| S6 | Gold-answer position | Gold answer position is uniformly distributed over {0,1,2,3} per regime (chi-squared p > 0.05) |
+
+These checks are deterministic and run before any classifier-based evaluation.
+They catch the structural leakage patterns that caused v2 INSUFFICIENT failures.
+
+#### 2.5.3 Regime-Identifying Vocabulary Test (DIAGNOSTIC, demoted from GATE)
+
+After removing suspect names, can a TF-IDF classifier predict the regime
+from the remaining text? If regime is identifiable from vocabulary, the
+generator's regime-specific language patterns may leak.
+
+**Status:** Informational diagnostic (DEMOTED from gate). Rationale for
+demotion:
+
+1. Regimes differ in evidence structure by design (e.g., CONFLICT items have
+   contradictory evidence, DECOY items have misleading evidence). Some
+   vocabulary signal from these structural differences is unavoidable and
+   does not constitute a confound for the primary research question.
+2. The real danger is structural shortcuts (option count, abstention
+   presence/position) that allow trivial identification without reading
+   content. These are caught by the surface-form gates (§2.5.2).
+3. A hard gate on vocabulary classification risks spurious failures from
+   regime-appropriate language that the evaluated model cannot exploit as
+   a shortcut to the correct answer.
+
+**Reporting requirement:** The regime-vocabulary classifier accuracy and CI
+are reported in the leakage report. If CI upper > 0.30, the report flags
+this with a note explaining whether the signal comes from (a) structural
+shortcuts (which should have been caught by §2.5.2) or (b) content-level
+vocabulary differences inherent to the regime design.
+
+#### 2.5.4 Cross-Regime Counterfactual Pairs (DIAGNOSTIC)
+
+The generator produces counterfactual minimal pairs: items sharing the same
+template and suspect set but assigned to different regimes. For each pair,
+the only differences should be in evidence content (polarity, diagnosticity,
+sufficiency), not in surface structure.
+
+**Verification:** For each counterfactual pair (item_A in regime R1,
+item_B in regime R2):
+- Same number of suspects, same suspect names
+- Same number of evidence items (±1 allowed)
+- Jaccard similarity of non-evidence text >= 0.85
+- Different gold answer only when regime semantics require it
+
+This is an informational diagnostic that helps interpret regime-vocabulary
+classifier results: if cross-regime counterfactual pairs have high surface
+similarity but the vocabulary classifier still discriminates, the signal
+is likely from evidence content (acceptable) rather than template structure
+(concerning).
 
 ### 2.6 Preserved v2 Counterbalancing Invariants
 
@@ -177,22 +237,54 @@ Where chance = mean(1/n_options) per item = 0.25 under universal 4-option design
 Gate semantics: every cell in the {baseline} x {regime} x {split} matrix must
 PASS. A single FAIL means the overall verdict is FAIL.
 
-### 3.2 Audit-N Power Simulation
+### 3.2 Audit-N Power Simulation (JOINT GATE)
 
 **Before generating the final-audit set**, run an equivalence-gate power
 simulation to determine the minimum per-regime N such that:
 
-P(PASS | true accuracy = chance) >= target_power
+P(ALL baselines x regimes PASS simultaneously | true accuracy = chance) >= target_power
 
-for every baseline. Report the required N at three power targets:
+This is a **joint gate** requirement, not per-baseline. The overall gate requires
+every cell in the {baseline x regime} matrix to PASS. Under independence, the
+joint pass probability is the product of marginal pass probabilities, which
+can be far below the individual marginal even when each cell individually
+achieves high pass probability.
 
-| Target power | Per-regime N | Total audit N |
-|-------------|--------------|---------------|
-| 0.80 | [to be computed] | [to be computed] |
-| 0.90 | [to be computed] | [to be computed] |
-| 0.95 | [to be computed] | [to be computed] |
+**Simulation:** `analysis/leakage_audit_power.py`
+**Results:** `analysis/leakage_audit_power_results.json`
 
-**Default target:** P(PASS | true chance) >= 0.90 per baseline.
+**Key parameters:**
+- K = 11 baselines x 4 regimes = 44 cells on the audit split
+- Chance = 0.25 for all regimes (universal 4-option design)
+- Gate: Wilson 95% CI upper <= 0.25 + 0.05 = 0.30
+
+**Power table (P(joint gate passes | H0), Monte Carlo, 50k marginal / 100k joint):**
+
+| N/regime | Total N | Marginal P(PASS) | Joint (rho=0) | Joint (rho=0.3) | Joint (rho=0.6) |
+|----------|---------|------------------|---------------|-----------------|-----------------|
+| 500 | 2,000 | 0.677 | 0.000 | 0.018 | 0.132 |
+| 750 | 3,000 | 0.864 | 0.002 | 0.136 | 0.362 |
+| 1,000 | 4,000 | 0.941 | 0.069 | 0.345 | 0.582 |
+| 1,500 | 6,000 | 0.992 | 0.692 | 0.799 | 0.886 |
+| 2,000 | 8,000 | 0.999 | 0.952 | 0.961 | 0.977 |
+| 2,500 | 10,000 | 1.000 | 0.996 | 0.996 | 0.997 |
+
+**Minimum N for target joint power:**
+
+| Target | rho=0.0 | rho=0.3 | rho=0.6 |
+|--------|---------|---------|---------|
+| 0.80 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 1,500/regime (6,000 total) |
+| 0.90 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
+| 0.95 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
+
+**Sensitivity note:** rho represents equicorrelation between baseline pass/fail
+indicators. rho=0 assumes independence (conservative). rho=0.3-0.6 reflects
+plausible correlation where baselines share the same prediction errors on
+similar items. Higher correlation increases joint power (failures cluster
+rather than spreading).
+
+**Default target:** P(joint gate passes | H0) >= 0.90. This requires
+**2,000 items per regime (8,000 total)** regardless of assumed correlation.
 
 The computed per-regime audit N is FROZEN before generating the fresh audit set.
 

@@ -439,33 +439,92 @@ since 000 has E=0 and is outside the T×D factorial.
 
 ## Power Analysis
 
-### Assumptions (from design document D6)
+*Full details: `docs/power_analysis.md` (v2.0, Phase A.1 rewrite per AMENDMENT-002)*
 
-**Baseline accuracy**: p₀ = 0.50 (50% correct without scaffolding)
+### Design (AMENDMENT-002 §4.1)
 
-**Minimum detectable effect**: δ = 0.03 (3 percentage points absolute improvement)
+The experiment uses 5 conditions (not a full 2×2×2 factorial; E=0 cells with
+T=1 or D=1 are incoherent and excluded):
 
-**Item random effect SD**: σ_item = 0.5 (logit scale)
-- Implies substantial item-to-item difficulty variance
+| Condition | E | T | D | Description |
+|-----------|---|---|---|-------------|
+| 000 | 0 | 0 | 0 | Baseline |
+| 100 | 1 | 0 | 0 | Enumerate-only |
+| 110 | 1 | 1 | 0 | Enumerate + trajectory |
+| 101 | 1 | 0 | 1 | Enumerate + deconfounding (ACH) |
+| 111 | 1 | 1 | 1 | Full scaffold |
 
-**Model (fixed effect, AMENDMENT-002)**: With 2-3 model families, model is treated
-as a fixed effect. The former σ_model = 0.2 random effect specification is withdrawn.
+**Primary confirmatory contrast**: D|E=1 — does ACH deconfounding improve
+accuracy conditional on enumeration? Operationalized as
+mean(101, 111) vs mean(100, 110), tested via McNemar test on paired
+within-item binary outcomes.
 
-**Recommended N**: 100 items minimum for 80% power at α = 0.05
+### Statistical Tests
 
-**Recommended k_runs**: 3 (balances precision with cost)
+1. **McNemar test** (primary): Paired within-item binary outcome. Each item
+   contributes D=0 accuracy (mean of 100 and 110 runs) and D=1 accuracy
+   (mean of 101 and 111 runs), binarized at 0.5.
+2. **Mixed-effects logistic regression** (confirmatory):
+   `logit(P(correct)) ~ T * D + regime + model + (1 | item)`
 
-### Sensitivity Analysis
+### Model as Fixed Effect (AMENDMENT-002 §4.2)
 
-**If baseline accuracy differs from 0.50**:
-- Higher baseline (e.g., 0.70): Requires larger N to detect same δ (ceiling effects)
-- Lower baseline (e.g., 0.30): Easier to detect improvements (more room to grow)
+With 2-3 model families, model is treated as a fixed effect. The former
+σ_model = 0.2 random effect specification is withdrawn. Power analysis is
+conducted per-model; no generalization claim is made beyond tested models.
 
-**If item variance is higher than expected**:
-- Increase N or use within-item contrasts (McNemar test)
+### Minimum Detectable Effect (MDE)
 
-**If effect size is smaller than δ = 0.03**:
-- May be underpowered; interpret null results cautiously
+The MDE depends on the chosen design configuration (N, k_runs, σ_item). We
+do NOT claim a single fixed MDE across all scenarios. Instead:
+
+1. Report MDE as a function of (N, k_runs, σ_item) in a table
+2. State the MDE for the CHOSEN configuration
+3. Pre-register the chosen configuration before data collection
+
+**Parameter grid** (simulation script: `analysis/power_simulation.py`):
+
+| Parameter | Values |
+|-----------|--------|
+| N (items) | 50, 100, 150, 200, 300 |
+| k_runs | 1, 3, 5 |
+| σ_item | 0.3, 0.5, 0.8 |
+| p₀ (baseline accuracy) | 0.35, 0.50 |
+| δ_D (D effect, probability scale) | 0.03, 0.05, 0.07, 0.10 |
+
+**Placeholder recommendations** (to be replaced by simulation results):
+
+| Scenario | N_items | k_runs | Detectable effect |
+|----------|---------|--------|-------------------|
+| Conservative (σ=0.8, p₀=0.35) | 200 | 3 | ~7pp at 80% power |
+| Moderate (σ=0.5, p₀=0.50) | 200 | 3 | ~5pp at 80% power |
+| Optimistic (σ=0.3, p₀=0.50) | 200 | 3 | ~3pp at 80% power |
+
+### Multiple Comparison Procedure
+
+**Primary family** (3 tests, Bonferroni-Holm at α=0.05):
+1. Enumeration contrast: 100 vs 000
+2. T|E=1: mean(110, 111) vs mean(100, 101)
+3. D|E=1: mean(101, 111) vs mean(100, 110)
+
+**Secondary family** (exploratory, BH FDR at α=0.05):
+1. T×D|E=1 interaction
+2. D×regime interaction
+3. Per-regime D estimates
+
+### Regime-Specific Power
+
+The primary analysis focuses on adversarial regimes (DECOY + CONFLICT).
+Per-regime power estimates are reported because item variance may differ
+by regime.
+
+### Interpretation Constraints
+
+1. **Null findings**: A non-significant D|E=1 effect is informative ONLY IF
+   the 95% CI excludes effects above the pre-registered MDE.
+2. **Regime interactions**: If D|E=1 is significant in only one adversarial
+   regime, this is an exploratory finding, not a pre-registered prediction.
+3. **Model specificity**: Results apply to tested model families only.
 
 ---
 

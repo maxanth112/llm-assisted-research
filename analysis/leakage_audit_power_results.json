@@ -1,0 +1,480 @@
+{
+  "description": "Joint-gate power simulation for leakage equivalence audit",
+  "design": {
+    "n_baselines": 11,
+    "n_regimes": 4,
+    "n_splits_modeled": 1,
+    "chance_values": {
+      "CLEAN": 0.25,
+      "DECOY": 0.25,
+      "CONFLICT": 0.25,
+      "INSUFFICIENT": 0.25
+    },
+    "alpha": 0.05,
+    "gate": "Wilson 95% CI upper <= chance + alpha"
+  },
+  "sensitivity": {
+    "rho_values": [
+      0.0,
+      0.3,
+      0.6
+    ],
+    "note": "rho = equicorrelation between baseline pass/fail indicators"
+  },
+  "power_table": [
+    {
+      "n_per_regime": 500,
+      "total_audit_n": 2000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.677
+        },
+        "DECOY": {
+          "n": 500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.67866
+        },
+        "CONFLICT": {
+          "n": 500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.68408
+        },
+        "INSUFFICIENT": {
+          "n": 500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.68144
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.0,
+        "rho_0.3": 0.01839,
+        "rho_0.6": 0.13169
+      }
+    },
+    {
+      "n_per_regime": 750,
+      "total_audit_n": 3000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 750,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.86404
+        },
+        "DECOY": {
+          "n": 750,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.86362
+        },
+        "CONFLICT": {
+          "n": 750,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.86644
+        },
+        "INSUFFICIENT": {
+          "n": 750,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.8627
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.00163,
+        "rho_0.3": 0.13597,
+        "rho_0.6": 0.36195
+      }
+    },
+    {
+      "n_per_regime": 1000,
+      "total_audit_n": 4000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 1000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.94128
+        },
+        "DECOY": {
+          "n": 1000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.9409
+        },
+        "CONFLICT": {
+          "n": 1000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.94216
+        },
+        "INSUFFICIENT": {
+          "n": 1000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.93986
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.06902,
+        "rho_0.3": 0.3452,
+        "rho_0.6": 0.58225
+      }
+    },
+    {
+      "n_per_regime": 1500,
+      "total_audit_n": 6000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 1500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99174
+        },
+        "DECOY": {
+          "n": 1500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99182
+        },
+        "CONFLICT": {
+          "n": 1500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99158
+        },
+        "INSUFFICIENT": {
+          "n": 1500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99146
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.69146,
+        "rho_0.3": 0.79943,
+        "rho_0.6": 0.88618
+      }
+    },
+    {
+      "n_per_regime": 2000,
+      "total_audit_n": 8000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 2000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99892
+        },
+        "DECOY": {
+          "n": 2000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99894
+        },
+        "CONFLICT": {
+          "n": 2000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.9988
+        },
+        "INSUFFICIENT": {
+          "n": 2000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99882
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.95147,
+        "rho_0.3": 0.96098,
+        "rho_0.6": 0.97654
+      }
+    },
+    {
+      "n_per_regime": 2500,
+      "total_audit_n": 10000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 2500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99992
+        },
+        "DECOY": {
+          "n": 2500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99988
+        },
+        "CONFLICT": {
+          "n": 2500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99988
+        },
+        "INSUFFICIENT": {
+          "n": 2500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99992
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.99561,
+        "rho_0.3": 0.99589,
+        "rho_0.6": 0.99729
+      }
+    },
+    {
+      "n_per_regime": 3000,
+      "total_audit_n": 12000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 3000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99998
+        },
+        "DECOY": {
+          "n": 3000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 0.99998
+        },
+        "CONFLICT": {
+          "n": 3000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "INSUFFICIENT": {
+          "n": 3000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 0.99956,
+        "rho_0.3": 0.99961,
+        "rho_0.6": 0.9997
+      }
+    },
+    {
+      "n_per_regime": 4000,
+      "total_audit_n": 16000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 4000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "DECOY": {
+          "n": 4000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "CONFLICT": {
+          "n": 4000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "INSUFFICIENT": {
+          "n": 4000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 1.0,
+        "rho_0.3": 1.0,
+        "rho_0.6": 1.0
+      }
+    },
+    {
+      "n_per_regime": 5000,
+      "total_audit_n": 20000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 5000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "DECOY": {
+          "n": 5000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "CONFLICT": {
+          "n": 5000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "INSUFFICIENT": {
+          "n": 5000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 1.0,
+        "rho_0.3": 1.0,
+        "rho_0.6": 1.0
+      }
+    },
+    {
+      "n_per_regime": 7500,
+      "total_audit_n": 30000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 7500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "DECOY": {
+          "n": 7500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "CONFLICT": {
+          "n": 7500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "INSUFFICIENT": {
+          "n": 7500,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 1.0,
+        "rho_0.3": 1.0,
+        "rho_0.6": 1.0
+      }
+    },
+    {
+      "n_per_regime": 10000,
+      "total_audit_n": 40000,
+      "n_cells": 44,
+      "per_regime": {
+        "CLEAN": {
+          "n": 10000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "DECOY": {
+          "n": 10000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "CONFLICT": {
+          "n": 10000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        },
+        "INSUFFICIENT": {
+          "n": 10000,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "marginal_pass_prob": 1.0
+        }
+      },
+      "joint_pass_prob": {
+        "rho_0.0": 1.0,
+        "rho_0.3": 1.0,
+        "rho_0.6": 1.0
+      }
+    }
+  ],
+  "minimum_n": {
+    "target_0.80": {
+      "rho_0.0": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.95147
+      },
+      "rho_0.3": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.96098
+      },
+      "rho_0.6": {
+        "n_per_regime": 1500,
+        "total_audit_n": 6000,
+        "joint_pass_prob": 0.88618
+      }
+    },
+    "target_0.90": {
+      "rho_0.0": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.95147
+      },
+      "rho_0.3": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.96098
+      },
+      "rho_0.6": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.97654
+      }
+    },
+    "target_0.95": {
+      "rho_0.0": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.95147
+      },
+      "rho_0.3": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.96098
+      },
+      "rho_0.6": {
+        "n_per_regime": 2000,
+        "total_audit_n": 8000,
+        "joint_pass_prob": 0.97654
+      }
+    }
+  },
+  "simulation_params": {
+    "n_sims_marginal": 50000,
+    "n_sims_joint": 100000,
+    "seed": 42
+  }
+}

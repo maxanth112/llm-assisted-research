@@ -1,261 +1,204 @@
 # Power Analysis for ETD-ACH Factorial Experiment
 
-## 1. Statistical Model Specification
+**Document version**: 2.0 (Phase A.1 rewrite per AMENDMENT-002)
+**Last updated**: 2026-08-27
+**Simulation script**: `analysis/power_simulation.py`
 
-The ETD-ACH factorial experiment uses a mixed-effects logistic regression model to account for item-level variability:
+## 1. Design Summary
 
-**NOTE (AMENDMENT-002 correction):** The model below replaces the original
-`E * T * D + (1|model)` specification. The full 2×2×2 is not estimable (E=0
-cells with T=1/D=1 are incoherent). Model is fixed effect (2-3 levels).
+### 1.1 Conditions
 
-```
-Y_ij ~ Bernoulli(p_ij)
-logit(p_ij) = μ + α_T·T + α_D·D + β_TD·T·D + γ_model + u_j
-u_j ~ N(0, σ²_item)
-```
+The experiment uses 5 conditions (not a full 2x2x2 factorial):
 
-Where (conditional on E=1 cells only: 100, 110, 101, 111):
-- **Y_ij**: Binary outcome (correct/incorrect) for item *j* in condition *i*
-- **T**, **D**: Binary fixed effects (0/1), conditional on E=1
-- **β_TD**: T×D interaction
-- **γ_model**: Fixed effect for model family (not random — only 2-3 levels)
-- **u_j**: Item random effect capturing item-specific difficulty
-- **σ_item**: Standard deviation of item random effects
+| Condition | E | T | D | Description |
+|-----------|---|---|---|-------------|
+| 000 | 0 | 0 | 0 | Baseline: no enumeration, no trajectory, no deconfounding |
+| 100 | 1 | 0 | 0 | Enumerate-only |
+| 110 | 1 | 1 | 0 | Enumerate + trajectory |
+| 101 | 1 | 0 | 1 | Enumerate + deconfounding (ACH) |
+| 111 | 1 | 1 | 1 | Full scaffold: enumerate + trajectory + deconfounding |
 
-The enumeration contrast (100 vs 000) is tested separately.
+E=0 cells with T=1 or D=1 are **incoherent** (cannot tabulate or deconfound
+without first enumerating hypotheses) and are excluded.
 
-### Model Rationale
+### 1.2 Estimable Contrasts
 
-- **Logistic link**: Appropriate for binary accuracy outcomes
-- **Random item effects**: Account for heterogeneity in item difficulty; critical because we use deterministic diagnostic items rather than a large sample from a population
-- **Conditional T×D factorial**: Only the 4 E=1 cells are coherent; estimands are T|E=1, D|E=1, T×D|E=1
-- **Model as fixed effect**: 2-3 model families are insufficient for random effect estimation; model-specific estimates are reported
-- **Within-item design**: Each item appears in all conditions (between runs), maximizing power
+| # | Contrast | Operationalization | Type |
+|---|----------|-------------------|------|
+| 1 | Enumeration | 100 vs 000 | Independent (different condition families) |
+| 2 | T\|E=1 | mean(110, 111) vs mean(100, 101) | Paired within-item |
+| 3 | D\|E=1 | mean(101, 111) vs mean(100, 110) | Paired within-item |
+| 4 | T×D\|E=1 | (111 − 110) − (101 − 100) | Paired within-item |
 
-## 2. Primary Contrast: D Main Effect
+**Primary confirmatory contrast:** #3 (D|E=1) — does ACH deconfounding
+improve accuracy over enumerate-only, conditional on enumeration being active?
 
-**Research Question**: Does full ACH scaffolding with deconfounding (D=1) improve accuracy compared to enumerate-only scaffolding (D=0)?
+### 1.3 Within-Item Design
 
-**Statistical Test**: Two-sample t-test comparing mean accuracy across D=1 vs D=0 conditions, aggregating across all factorial cells and items.
+Each item appears in all 5 conditions (across separate runs). For the E=1
+contrasts (#2-4), each item contributes paired outcomes in conditions 100,
+110, 101, 111. This pairing removes item-difficulty variance and enables
+the McNemar test.
 
-**Null Hypothesis**: H₀: α_D = 0 (no difference in accuracy between dataset regimes)
+### 1.4 Regimes
 
-**Alternative Hypothesis**: H₁: α_D > 0 (full ACH improves accuracy)
+Items come from 4 regimes. The primary contrast (D|E=1) is most meaningful
+for adversarial regimes where deconfounding has diagnostic value:
 
-This is the **primary confirmatory hypothesis** for the experiment.
+| Regime | Role in primary analysis |
+|--------|------------------------|
+| CLEAN | Informational (deconfounding may not help when evidence is clean) |
+| DECOY | **Primary**: deconfounding should help distinguish diagnostic from non-diagnostic evidence |
+| CONFLICT | **Primary**: deconfounding should help resolve source conflicts |
+| INSUFFICIENT | Informational (tests uncertainty acknowledgment, not deconfounding) |
 
-## 3. Secondary Contrasts
+### 1.5 Model as Fixed Effect
 
-While the D main effect is primary, we also examine:
+With 2-3 model families, model is a fixed effect (insufficient levels for
+random effect estimation). Power analysis is conducted per-model and
+results reported model-by-model. No generalization claim is made beyond
+tested models.
 
-1. **E Main Effect** (α_E): Does evidence presentation mode affect accuracy?
-2. **T Main Effect** (α_T): Does reasoning trajectory (CoT vs direct) affect accuracy?
-3. **E × T Interaction** (β_ET): Does the effect of evidence depend on trajectory type?
-4. **Higher-order interactions**: E×D, T×D, E×T×D
+## 2. Statistical Tests
 
-These are **exploratory analyses** and will be corrected for multiple comparisons.
+### 2.1 Primary: McNemar Test (Paired Within-Item)
 
-## 4. Effect Sizes
+For the D|E=1 contrast, each item contributes a paired binary outcome:
 
-We sweep the following effect sizes for the D main effect (absolute accuracy difference on probability scale):
+- D=0 outcome: average of (item under 100, item under 110) → binarize
+- D=1 outcome: average of (item under 101, item under 111) → binarize
 
-| Effect Size | Description | Percentage Points |
-|-------------|-------------|------------------|
-| 0.005 | Very small | 0.5pp |
-| 0.01 | Small | 1pp |
-| 0.02 | Moderate | 2pp |
-| 0.03 | Medium | 3pp |
-| 0.05 | Large | 5pp |
+With k_runs per condition, each cell has k_runs binary outcomes. The
+per-item D=0 and D=1 scores are the mean accuracy across their respective
+cells and runs.
 
-**Interpretation**: These represent the absolute increase in accuracy (e.g., from 50% to 53% is a 3pp effect).
-
-**Minimal Detectable Effect**: Based on power simulations, we aim to design the study to detect a **3pp effect with 80% power**. This is considered the smallest practically meaningful effect for ACH scaffolding evaluation.
-
-## 5. Design Parameters
-
-The power simulation sweeps the following design parameters:
-
-### Sample Size (n_items)
-- Values: 25, 50, 100, 150, 200, 250
-- Definition: Number of distinct T2 items used in the experiment
-
-### Runs per Condition (k_runs)
-- Values: 1, 3, 5
-- Definition: Number of independent runs per factorial cell per item
-- Note: k_runs=1 provides minimal variance; k_runs≥3 recommended for robustness
-
-### Baseline Accuracy (baseline_acc)
-- Values: 0.4, 0.5, 0.6
-- Definition: Expected accuracy in the reference condition (E=0, T=0, D=0)
-- Rationale: Models uncertainty in true model capability
-
-### Item Variance (σ_item)
-- Values: 0.3, 0.5, 0.8
-- Definition: Standard deviation of item random effects on logit scale
-- Interpretation:
-  - σ=0.3: Low heterogeneity (items similar difficulty)
-  - σ=0.5: Moderate heterogeneity (typical for diagnostic items)
-  - σ=0.8: High heterogeneity (some items much harder than others)
-
-## 6. Key Findings
-
-**Results from `power_simulation.py` (quick mode, 500 sims/config, T2 v2 items):**
-
-### Power Curves
-
-The following table summarizes the minimum n_items required to achieve 80% power for each effect size:
-
-| Effect Size | Min n_items | Configuration |
-|-------------|-------------|---------------|
-| 0.5pp | >250 | Not achievable with tested ranges |
-| 1pp | >250 | Not achievable with tested ranges |
-| 2pp | >250 | Not achievable with tested ranges |
-| 3pp | >250 | Borderline; requires ≥250 items, k_runs≥5 |
-| 5pp | 150 | k_runs=3, power=0.814 |
-
-### Sensitivity Analysis
-
-- **Impact of baseline accuracy**: Higher baseline (0.6) provides slightly more power than lower (0.4) for the same effect size, but the difference is modest (~5% power).
-- **Impact of item variance**: σ_item=0.3 (low heterogeneity) provides substantially more power than σ_item=0.8 (high heterogeneity). T2 v2 items are designed for lower heterogeneity via counterbalancing.
-- **Impact of k_runs**: k_runs=3 provides a meaningful boost over k_runs=1 (roughly 2x power increase). k_runs=5 provides diminishing returns over k_runs=3.
-
-### Smallest Detectable Effect
-
-At the recommended design (n_items=200, k_runs=3):
-- **80% power to detect**: ~5pp effect
-- **95% power to detect**: >5pp effect
-- **Precision for null findings**: 95% CI excludes effects larger than ~5pp
-
-## 7. Recommendations
-
-### Recommended Design
-
-Based on the power simulations:
-
-- **n_items**: 200 items from T2 v2 dataset (50 per regime)
-- **k_runs**: 3 independent runs per condition
-- **Factorial design**: 5 factorial conditions (000, 100, 110, 101, 111) + 3 reference
-- **Total model calls**: 200 × 3 × 8 = 4,800
-
-### Interpretation Constraints
-
-1. **Confirmatory vs Exploratory**:
-   - Primary contrast (D main effect) is confirmatory
-   - All other contrasts are exploratory and require multiple comparison correction
-
-2. **Null Findings**:
-   - A non-significant D main effect is **only informative if** the 95% confidence interval excludes effects above the minimal detectable threshold (3pp)
-   - Report precision: "We can rule out effects larger than X pp with 95% confidence"
-
-3. **Trade-offs**:
-   - **Clean vs Adversarial Items**: More adversarial items (DECOY, CONFLICT) increase σ_item, reducing power; however, they provide stronger validity for the deconfounding mechanism
-   - **Single vs Multiple Model Families**: Testing multiple model families reduces power for any single model but increases generalizability
-   - Recommendation: Run power analysis separately for each model family; pool only if effects are homogeneous
-
-### Statistical Practices
-
-1. **Pre-registration**: Register the analysis plan, including:
-   - Primary contrast (D main effect)
-   - Minimal detectable effect (3pp)
-   - Multiple comparison procedure (see below)
-
-2. **Robustness Checks**:
-   - McNemar test for paired within-item contrasts (more powerful)
-   - Mixed-effects logistic regression with item random effects (confirmatory)
-   - Subgroup analyses by regime (CLEAN, DECOY, CONFLICT, INSUFFICIENT)
-
-3. **Reporting**:
-   - Always report effect sizes with 95% CIs
-   - Never report only p-values
-   - For null findings, report precision (maximum excluded effect)
-
-## 8. Multiple Comparison Procedure
-
-Given multiple secondary contrasts, we use the **Benjamini-Hochberg procedure** to control False Discovery Rate (FDR):
-
-### Procedure
-
-1. Compute p-values for all contrasts: p₁, p₂, ..., p_m
-2. Rank p-values: p(₁) ≤ p(₂) ≤ ... ≤ p(m)
-3. Find largest k such that p(k) ≤ (k/m) × α
-4. Reject H₀ for all contrasts with p ≤ p(k)
-
-### Settings
-
-- **α (FDR level)**: 0.05
-- **Primary family**: 3 contrasts (enumeration, T|E=1, D|E=1) at FDR=0.05
-- **Secondary family**: 5 contrasts (T×D|E=1, D×regime, token-budget, faithfulness, order-flip) at FDR=0.05
-
-### Rationale
-
-- FDR control is less conservative than Bonferroni but still protects against false discoveries
-- Primary contrast exemption is justified by pre-registration
-- BH procedure has good power when most tests are non-null (as expected in factorial designs)
-
-## 9. McNemar Test for Paired Contrasts
-
-For within-item comparisons (same item in two conditions), the **McNemar test** is more powerful than an independent t-test.
-
-### When to Use
-
-- Comparing D=0 vs D=1 **within the same item**
-- Each item contributes a pair: (Y_j | D=0, E=e, T=t) vs (Y_j | D=1, E=e, T=t)
-
-### Test Statistic
-
-For paired binary outcomes:
-
+**McNemar statistic:**
 ```
 χ² = (n₁₀ - n₀₁)² / (n₁₀ + n₀₁)
 ```
 
 Where:
-- n₁₀: number of items correct in D=1 but incorrect in D=0
-- n₀₁: number of items correct in D=0 but incorrect in D=1
+- n₁₀: items correct under D=1 but incorrect under D=0
+- n₀₁: items correct under D=0 but incorrect under D=1
 
-### Advantages
+**Advantages:**
+- Exploits within-item pairing (removes σ_item from denominator)
+- Exact binomial version available for small N
+- More powerful than independent-sample tests when item variance is large
 
-- Exploits within-item pairing for increased power
-- Requires fewer items than independent t-test
-- Robust to item difficulty heterogeneity
+### 2.2 Confirmatory: Mixed-Effects Logistic Regression
 
-### Recommendation
+```
+logit(P(correct)) ~ T * D + regime + model + (1 | item)
+```
 
-- **Primary analysis**: McNemar test for D=0 vs D=1 comparison
-- **Robustness check**: Mixed-effects logistic regression (accounts for random effects explicitly)
+This is the pre-registered confirmatory model (AMENDMENT-002 §4.2).
+The McNemar test is a robustness check that does not assume the logistic
+link.
 
-## 10. Limitations and Assumptions
+## 3. Power Simulation
 
-### Model Assumptions
+### 3.1 Data-Generating Process
 
-1. **Independence**: Outcomes are independent across items (within and between runs)
-   - Potential violation: Model may learn patterns across items in a session
-   - Mitigation: Randomize item order; use fresh model instances per run
+For each simulation replicate:
 
-2. **Logistic link**: True data-generating process follows logistic function
-   - Robustness: t-tests on proportions are robust to link misspecification
+1. Draw item random effects: u_j ~ N(0, σ²_item), j = 1...N
+2. For each item j in each E=1 condition (100, 110, 101, 111):
+   - Compute logit(p_j) = μ + α_T·T + α_D·D + β_TD·T·D + u_j
+   - Draw k_runs Bernoulli outcomes with probability sigmoid(logit(p_j))
+3. Compute per-item D=0 accuracy (mean of 100 and 110 runs) and D=1
+   accuracy (mean of 101 and 111 runs)
+4. Binarize: item "correct under D=d" iff mean accuracy > 0.5
+5. Run McNemar test
+6. Record whether p < α
 
-3. **Normality of random effects**: Item effects are normally distributed
-   - Robustness: Central Limit Theorem applies for large n_items (≥50)
+Power = proportion of replicates where p < α.
 
-### External Validity
+### 3.2 Parameter Grid
 
-- **Item representativeness**: T2 items are synthetic and template-based; findings may not generalize to real-world ACH tasks
-- **Model generalization**: Power estimates assume stable model performance across items; adaptive or meta-learning models may violate this
+| Parameter | Values | Notes |
+|-----------|--------|-------|
+| N (items) | 50, 100, 150, 200, 300 | Per-regime or total (specified per row) |
+| k_runs | 1, 3, 5 | Runs per condition per item |
+| σ_item | 0.3, 0.5, 0.8 | Item random effect SD (logit scale) |
+| p₀ | 0.35, 0.50 | Baseline accuracy (E=1, T=0, D=0) |
+| δ_D | 0.03, 0.05, 0.07, 0.10 | D effect on probability scale |
+| α | 0.05 | Significance level |
+| n_sims | 2000 | Replicates per configuration |
 
-### Design Constraints
+### 3.3 Results
 
-- **Partial factorial**: Power calculations are for the 2×2 T×D design conditional on E=1 (4 cells: 100, 110, 101, 111) plus the enumeration contrast (100 vs 000)
-- **Item selection**: Power estimates assume random sampling of items; adversarial selection may increase σ_item
+*To be computed when model-inference credentials are confirmed and the
+experiment design is finalized. The simulation script
+(`analysis/power_simulation.py`) implements the data-generating process
+described above.*
 
-## 11. References
+**Placeholder recommendations (to be replaced by simulation results):**
 
-- Gelman, A., & Hill, J. (2006). *Data Analysis Using Regression and Multilevel/Hierarchical Models*. Cambridge University Press.
-- Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. *Journal of the Royal Statistical Society: Series B*, 57(1), 289-300.
-- McNemar, Q. (1947). Note on the sampling error of the difference between correlated proportions or percentages. *Psychometrika*, 12(2), 153-157.
+| Scenario | N_items | k_runs | Detectable effect |
+|----------|---------|--------|-------------------|
+| Conservative (σ=0.8, p₀=0.35) | 200 | 3 | ~7pp at 80% power |
+| Moderate (σ=0.5, p₀=0.50) | 200 | 3 | ~5pp at 80% power |
+| Optimistic (σ=0.3, p₀=0.50) | 200 | 3 | ~3pp at 80% power |
 
----
+These estimates will be replaced by exact simulation results when
+`analysis/power_simulation.py` is updated to the Phase A.1 specification.
 
-**Document version**: 1.1 (updated for T2 v2 per AMENDMENT-001)
-**Last updated**: 2026-08-23
-**Contact**: [To be filled]
+## 4. Minimum Detectable Effect (MDE)
+
+The MDE is the smallest effect size detectable at 80% power given the
+chosen design parameters (N, k_runs, σ_item).
+
+**Single MDE claim:** The MDE depends on the design configuration. We
+do NOT claim a single fixed MDE across all scenarios. Instead, we:
+
+1. Report MDE as a function of (N, k_runs, σ_item) in a table
+2. State the MDE for the CHOSEN design configuration
+3. Pre-register the chosen configuration before data collection
+
+**Regime-specific power:** The primary analysis focuses on adversarial
+regimes (DECOY + CONFLICT). If these have different item variance than
+CLEAN, the MDE may differ by regime. Report per-regime power estimates.
+
+## 5. Multiple Comparison Procedure
+
+### 5.1 Primary Family (3 tests, Bonferroni-Holm at α=0.05)
+
+1. Enumeration contrast (100 vs 000)
+2. T|E=1: mean(110, 111) vs mean(100, 101)
+3. D|E=1: mean(101, 111) vs mean(100, 110)
+
+### 5.2 Secondary Family (exploratory, BH FDR at α=0.05)
+
+1. T×D|E=1 interaction
+2. D×regime interaction (does D effect vary by regime?)
+3. Per-regime D estimates (CLEAN, DECOY, CONFLICT, INSUFFICIENT)
+
+### 5.3 Rationale
+
+- Primary family uses Bonferroni-Holm (strong FWER control, 3 tests)
+- Secondary family uses BH FDR (less conservative, appropriate for
+  exploratory analyses)
+
+## 6. Interpretation Constraints
+
+1. **Null findings**: A non-significant D|E=1 effect is informative ONLY IF
+   the 95% CI excludes effects above the pre-registered MDE.
+   Report: "We can rule out D effects larger than X pp with 95% confidence."
+
+2. **Regime interactions**: If D|E=1 is significant only in DECOY but not
+   CONFLICT (or vice versa), this is an exploratory finding, not a
+   pre-registered prediction.
+
+3. **Model specificity**: Results apply to tested model families only.
+   No generalization claim is made.
+
+## 7. References
+
+- McNemar, Q. (1947). Note on the sampling error of the difference
+  between correlated proportions or percentages. *Psychometrika*, 12(2),
+  153-157.
+- Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery
+  rate. *JRSS-B*, 57(1), 289-300.
+- Holm, S. (1979). A simple sequentially rejective multiple test
+  procedure. *Scandinavian Journal of Statistics*, 6(2), 65-70.
