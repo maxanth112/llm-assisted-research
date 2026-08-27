@@ -161,8 +161,13 @@ def _target_normalize_text(text: str, target_name: str,
     for src, dst in all_replacements:
         if not src:
             continue
-        # Case-insensitive replacement preserving word boundaries
-        pattern = re.escape(src)
+        # Case-insensitive replacement with word boundaries to avoid
+        # partial matches (e.g., "Ali" inside "Alice")
+        escaped = re.escape(src)
+        # Use \b only if src starts/ends with word characters
+        prefix = r'\b' if src[0].isalnum() else ''
+        suffix = r'\b' if src[-1].isalnum() else ''
+        pattern = prefix + escaped + suffix
         result = re.sub(pattern, dst, result, flags=re.IGNORECASE)
 
     return result

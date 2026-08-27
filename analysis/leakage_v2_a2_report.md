@@ -63,12 +63,17 @@ baseline 10).  Overall FAIL driven entirely by INSUFFICIENT.
 
 ### Injected-Leak Test Results
 
-The test suite now verifies that the ACTUAL TF-IDF predictors detect injected leakage:
+The test suite verifies that the ACTUAL TF-IDF predictors detect injected leakage.
+Leaked corpus: 300 items (3 template families), test on held-out template (N=100).
 
-| Test | Predictor | Leaked Corpus Accuracy | Chance | Status |
-|------|-----------|----------------------|--------|--------|
-| test_tfidf_word_detects_leakage | pred_tfidf_word | >0.50 | 0.333 | PASS |
-| test_tfidf_char_detects_leakage | pred_tfidf_char | >0.50 | 0.333 | PASS |
+| Test | Predictor | Accuracy | 95% CI | Chance | Status |
+|------|-----------|----------|--------|--------|--------|
+| test_tfidf_word_detects_leakage | pred_tfidf_word | 100/100 = 1.000 | [0.963, 1.000] | 0.333 | PASS |
+| test_tfidf_char_detects_leakage | pred_tfidf_char | 100/100 = 1.000 | [0.963, 1.000] | 0.333 | PASS |
+
+Both predictors achieve perfect accuracy on the deliberately leaked corpus,
+confirming that TARGET normalization enables genuine detection of visible
+lexical leakage via context content.
 
 ### Surface-Form Check Results (v2 corpus)
 
