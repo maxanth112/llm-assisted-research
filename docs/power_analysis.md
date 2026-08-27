@@ -4,25 +4,32 @@
 
 The ETD-ACH factorial experiment uses a mixed-effects logistic regression model to account for item-level variability:
 
+**NOTE (AMENDMENT-002 correction):** The model below replaces the original
+`E * T * D + (1|model)` specification. The full 2×2×2 is not estimable (E=0
+cells with T=1/D=1 are incoherent). Model is fixed effect (2-3 levels).
+
 ```
 Y_ij ~ Bernoulli(p_ij)
-logit(p_ij) = μ + α_E·E + α_T·T + α_D·D + β_ET·E·T + u_j
+logit(p_ij) = μ + α_T·T + α_D·D + β_TD·T·D + γ_model + u_j
 u_j ~ N(0, σ²_item)
 ```
 
-Where:
+Where (conditional on E=1 cells only: 100, 110, 101, 111):
 - **Y_ij**: Binary outcome (correct/incorrect) for item *j* in condition *i*
-- **E**: Evidence presentation (0 = enumerate-only, 1 = full ACH scaffolding)
-- **T**: Trajectory (0 = direct answer, 1 = chain-of-thought)
-- **D**: Dataset regime (0 = enumerate-only, 1 = full ACH with deconfounding)
+- **T**, **D**: Binary fixed effects (0/1), conditional on E=1
+- **β_TD**: T×D interaction
+- **γ_model**: Fixed effect for model family (not random — only 2-3 levels)
 - **u_j**: Item random effect capturing item-specific difficulty
 - **σ_item**: Standard deviation of item random effects
+
+The enumeration contrast (100 vs 000) is tested separately.
 
 ### Model Rationale
 
 - **Logistic link**: Appropriate for binary accuracy outcomes
 - **Random item effects**: Account for heterogeneity in item difficulty; critical because we use deterministic diagnostic items rather than a large sample from a population
-- **Factorial structure**: Allows testing of main effects and interactions
+- **Conditional T×D factorial**: Only the 4 E=1 cells are coherent; estimands are T|E=1, D|E=1, T×D|E=1
+- **Model as fixed effect**: 2-3 model families are insufficient for random effect estimation; model-specific estimates are reported
 - **Within-item design**: Each item appears in all conditions (between runs), maximizing power
 
 ## 2. Primary Contrast: D Main Effect
@@ -127,7 +134,7 @@ Based on the power simulations:
 
 - **n_items**: 200 items from T2 v2 dataset (50 per regime)
 - **k_runs**: 3 independent runs per condition
-- **Factorial design**: Full 2×2×2 (8 cells)
+- **Factorial design**: 5 factorial conditions (000, 100, 110, 101, 111) + 3 reference
 - **Total model calls**: 200 × 3 × 8 = 4,800
 
 ### Interpretation Constraints
@@ -176,9 +183,8 @@ Given multiple secondary contrasts, we use the **Benjamini-Hochberg procedure** 
 ### Settings
 
 - **α (FDR level)**: 0.05
-- **Number of contrasts**: 7 (E, T, D, E×T, E×D, T×D, E×T×D)
-- **Primary contrast**: D main effect is tested at α=0.05 without correction (pre-specified)
-- **Secondary contrasts**: Remaining 6 contrasts use Benjamini-Hochberg at FDR=0.05
+- **Primary family**: 3 contrasts (enumeration, T|E=1, D|E=1) at FDR=0.05
+- **Secondary family**: 5 contrasts (T×D|E=1, D×regime, token-budget, faithfulness, order-flip) at FDR=0.05
 
 ### Rationale
 
@@ -239,7 +245,7 @@ Where:
 
 ### Design Constraints
 
-- **Fixed factorial**: Power calculations assume full 2×2×2 design; partial factorials reduce power
+- **Partial factorial**: Power calculations are for the 2×2 T×D design conditional on E=1 (4 cells: 100, 110, 101, 111) plus the enumeration contrast (100 vs 000)
 - **Item selection**: Power estimates assume random sampling of items; adversarial selection may increase σ_item
 
 ## 11. References

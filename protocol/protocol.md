@@ -26,20 +26,30 @@ Does explicit disconfirmation scoring (the D component of Analysis of Competing 
 
 ## Primary Hypotheses
 
-### Main Effects
+### Estimable Contrasts
 
-**H1**: E > baseline (Enumeration alone improves accuracy)
-- Operationalization: `accuracy(E=1) > accuracy(E=0)`, averaged over T and D
+**NOTE (AMENDMENT-002 correction):** The original 2×2×2 E×T×D factorial is only
+partially identified because T and D require E=1 (enumerating hypotheses is a
+prerequisite for tabulating or disconfirming them). The cells E=0,T=1 and E=0,D=1
+are incoherent. Therefore, unconditional E, T, D main effects and the three-way
+E×T×D interaction are NOT estimable. The estimable contrasts are:
+
+**H1**: E > baseline (Enumeration contrast)
+- Operationalization: `accuracy(100) > accuracy(000)`
 - Rationale: Explicitly listing hypotheses forces systematic consideration of alternatives
 
-**H2**: T > E (Tabulation improves accuracy beyond enumeration alone)
-- Operationalization: `accuracy(T=1) > accuracy(T=0)`, averaged over E and D
-- Rationale: Structured evidence-hypothesis tables reduce cognitive load and prevent evidence from being overlooked
+**H2**: T main effect conditional on E=1
+- Operationalization: `accuracy(T=1 | E=1) > accuracy(T=0 | E=1)`, i.e., mean of (110, 111) vs mean of (100, 101)
+- Rationale: Structured evidence-hypothesis tables reduce cognitive load, given hypotheses are already enumerated
 
-**H3**: D > E+T (Disconfirmation scoring improves accuracy beyond enumeration+tabulation)
-- Operationalization: `accuracy(D=1) > accuracy(D=0)`, averaged over E and T
+**H3**: D main effect conditional on E=1
+- Operationalization: `accuracy(D=1 | E=1) > accuracy(D=0 | E=1)`, i.e., mean of (101, 111) vs mean of (100, 110)
 - Rationale: Explicit disconfirmation logic (ACH's core mechanism) should improve beyond mere structure
 - **Prior expectation**: Small or null effect (skeptical prior based on preliminary observations)
+
+**H3b**: T×D interaction conditional on E=1
+- Operationalization: `[accuracy(111) - accuracy(110)] - [accuracy(101) - accuracy(100)]`
+- Rationale: Tests whether T and D are synergistic or redundant
 
 ### Interactions and Moderators
 
@@ -49,10 +59,13 @@ Does explicit disconfirmation scoring (the D component of Analysis of Competing 
 
 ### Computational Cost Controls
 
-**H5**: T/D gains vanish when token budget and call count are matched (compute artifact hypothesis)
+**H5**: T/D gains vanish when token budget is matched (compute artifact hypothesis)
 - Operationalization:
   - Token-matched: `accuracy(E=1,T=1,D=1) ≈ accuracy(free_cot)` when both produce similar token counts
-  - Call-matched: `accuracy(E=1,T=1,D=1) ≈ accuracy(prism_full)` when both use multiple reasoning passes
+  - **Note (AMENDMENT-002):** 111 (1 call) vs prism_full (4 calls) is NOT call-matched.
+    This comparison is relabeled as a "decomposition vs scaffolding" contrast, not a
+    call-matched control. Genuine call-matching would require equalizing API calls and
+    tokens simultaneously, which is not implemented.
 - Rationale: Scaffolding benefits may be artifacts of increased computation rather than structural advantages
 
 ### Faithfulness and Robustness
@@ -206,23 +219,29 @@ Does explicit disconfirmation scoring (the D component of Analysis of Competing 
 
 ## Contrasts and Comparisons
 
-### Primary Contrasts (for hypothesis testing)
+### Primary Contrasts (AMENDMENT-002 corrected)
 
-1. **E main effect**: Conditions where E=1 vs E=0 (averaged over T, D)
-2. **T main effect**: Conditions where T=1 vs T=0 (averaged over E, D)
-3. **D main effect**: Conditions where D=1 vs D=0 (averaged over E, T)
+**Note:** Unconditional E, T, D main effects (averaged over all levels of the
+other factors) are NOT estimable because E=0 cells with T=1 or D=1 are
+incoherent. The estimable contrasts are:
 
-### Pairwise Contrasts (for interaction testing)
+1. **Enumeration contrast**: 100 vs 000
+2. **T|E=1**: mean(110, 111) vs mean(100, 101) — T main effect conditional on E=1
+3. **D|E=1**: mean(101, 111) vs mean(100, 110) — D main effect conditional on E=1
+4. **T×D|E=1**: (111 − 110) − (101 − 100) — T×D interaction conditional on E=1
 
-4. **E effect**: 100 vs 000 (E only vs baseline)
+### Pairwise Contrasts
+
 5. **T effect given E**: 110 vs 100 (adding T to E)
 6. **D effect given E**: 101 vs 100 (adding D to E)
 7. **D effect given E+T**: 111 vs 110 (adding D to E+T)
 
-### Matched Controls (for cost-control analysis)
+### Reference Comparisons (for cost analysis)
 
-8. **Token-matched**: 111 (full ACH) vs free_cot (both produce long outputs)
-9. **Call-matched**: 111 (single-call) vs prism_full (4-call decomposition)
+8. **Token-budget comparison**: 111 (full ACH) vs free_cot (both produce long outputs)
+9. **Decomposition vs scaffolding**: 111 (1-call scaffolded) vs prism_full (4-call decomposed)
+   - **Note (AMENDMENT-002):** This is NOT a call-matched comparison (different call counts).
+     It tests whether decomposed multi-call reasoning outperforms single-call scaffolding.
 
 ---
 
@@ -307,7 +326,10 @@ Does explicit disconfirmation scoring (the D component of Analysis of Competing 
 - Cost-effective (~$81 for full confirmatory study)
 - Reproducible (temperature=0 supported)
 
-**Model as random effect**: In mixed-effects analysis, model is treated as a random effect (assumes effects generalize beyond these specific models)
+**Model as fixed effect (AMENDMENT-002 correction)**: With only 2-3 model families,
+model is treated as a fixed effect and model-specific estimates are reported.
+A random effect over 2-3 levels is not estimable and would produce unreliable
+variance estimates. Generalization claims beyond these specific models are not made.
 
 ---
 
@@ -315,24 +337,33 @@ Does explicit disconfirmation scoring (the D component of Analysis of Competing 
 
 ### Primary Analysis: Mixed-Effects Logistic Regression
 
-**Model specification**:
+**NOTE (AMENDMENT-002 correction):** The model below replaces the original
+`E * T * D + (1|model)` specification. The full 2×2×2 interaction is not
+estimable (E=0 cells with T=1/D=1 are incoherent). Model is fixed effect
+(2-3 levels insufficient for random effect estimation).
+
+**Model specification** (conditional on E=1 cells only: 100, 110, 101, 111):
 
 ```
-logit(P(correct)) ~ E * T * D + regime + (1 | item) + (1 | model)
+logit(P(correct)) ~ T * D + regime + model + (1 | item)
 ```
 
 **Where**:
-- `E`, `T`, `D`: Binary fixed effects (0/1)
-- `E * T * D`: All main effects, 2-way interactions, and 3-way interaction
+- `T`, `D`: Binary fixed effects (0/1), conditional on E=1
+- `T * D`: T main effect, D main effect, and T×D interaction
 - `regime`: Fixed effect for evidence quality (CLEAN, DECOY, CONFLICT, INSUFFICIENT)
+- `model`: Fixed effect for model family (not random — only 2-3 levels)
 - `(1 | item)`: Random intercept for item (accounts for item difficulty variance)
-- `(1 | model)`: Random intercept for model (accounts for base model capability)
+
+The enumeration contrast (100 vs 000) is tested separately as a simple comparison
+since 000 has E=0 and is outside the T×D factorial.
 
 **Software**: R `lme4` package or Python `statsmodels` mixed-effects logit
 
 **Coefficient interpretation**:
-- Main effect of D: Average log-odds improvement from adding disconfirmation scoring
-- Interaction D × regime: Whether D's effect varies by evidence quality
+- Main effect of D (conditional on E=1): Log-odds improvement from adding disconfirmation
+- T×D interaction: Whether D's benefit depends on tabulation
+- Interaction D × regime: Whether D's effect varies by evidence quality (exploratory)
 
 ### Secondary Analysis: Pairwise Comparisons
 
@@ -346,15 +377,16 @@ logit(P(correct)) ~ E * T * D + regime + (1 | item) + (1 | model)
 
 ### Reference Condition Comparisons
 
-**Token-matched**:
+**Token-budget comparison**:
 - Compare 111 vs free_cot
-- Control for total token count (both conditions generate long outputs)
+- Both conditions generate long outputs with comparable token budgets
 - Test: If accuracy_111 ≈ accuracy_free_cot, suggests gains are computational artifacts
 
-**Call-matched**:
+**Decomposition vs scaffolding** (AMENDMENT-002 relabeled):
 - Compare 111 vs prism_full
-- Control for number of model calls (PRISM uses 4 calls; 111 uses 1)
-- Test: If accuracy_111 < accuracy_prism_full, suggests decomposition (not ACH structure) drives gains
+- **NOT call-matched**: 111 uses 1 call; prism_full uses 4 calls
+- Test: Whether decomposed multi-call reasoning outperforms single-call scaffolding
+- This comparison confounds reasoning strategy with compute budget; interpret accordingly
 
 ---
 
@@ -362,15 +394,19 @@ logit(P(correct)) ~ E * T * D + regime + (1 | item) + (1 | model)
 
 ### Family-Wise Strategy
 
-**Primary family** (confirmatory tests): H1, H2, H3
-- 3 tests (E main effect, T main effect, D main effect)
-- Correction: Benjamini-Hochberg at FDR = 0.05
-- Critical values adjusted for 3 comparisons
+**Primary family** (confirmatory, AMENDMENT-002 corrected):
+- H1: Enumeration contrast (100 vs 000)
+- H2: T|E=1 (conditional T main effect)
+- H3: D|E=1 (conditional D main effect)
+- 3 tests; Benjamini-Hochberg at FDR = 0.05
 
-**Secondary family** (exploratory tests): H4, H5, H6, H7
-- 4 tests (interaction with regime, compute controls, unfaithfulness, order-flip)
-- Correction: Separate Benjamini-Hochberg at FDR = 0.05
-- Critical values adjusted for 4 comparisons
+**Secondary family** (exploratory):
+- H3b: T×D|E=1 interaction
+- H4: D × regime interaction (D's benefit varies by evidence quality)
+- H5: Token-budget comparison (111 vs free_cot)
+- H6: Self-unfaithfulness (matrix vs final answer)
+- H7: Order-flip sensitivity
+- 5 tests; separate Benjamini-Hochberg at FDR = 0.05
 
 **Rationale**:
 - Primary family is confirmatory (preregistered hypotheses)
@@ -412,8 +448,8 @@ logit(P(correct)) ~ E * T * D + regime + (1 | item) + (1 | model)
 **Item random effect SD**: σ_item = 0.5 (logit scale)
 - Implies substantial item-to-item difficulty variance
 
-**Model random effect SD**: σ_model = 0.2 (logit scale)
-- Implies modest model-to-model capability variance
+**Model (fixed effect, AMENDMENT-002)**: With 2-3 model families, model is treated
+as a fixed effect. The former σ_model = 0.2 random effect specification is withdrawn.
 
 **Recommended N**: 100 items minimum for 80% power at α = 0.05
 

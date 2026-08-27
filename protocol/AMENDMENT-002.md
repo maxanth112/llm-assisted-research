@@ -1,0 +1,333 @@
+# Protocol Amendment 002: T2 v3 Design and Evaluator Corrections
+
+**Amendment ID:** AMENDMENT-002
+**Date filed:** 2026-08-27
+**Amends:** T2 Diagnostic Generator, Leakage Evaluator, Statistical Design
+**Status:** PRE-OUTCOME (criteria specified before generating or evaluating T2 v3)
+**Prerequisite:** AMENDMENT-001 (T2 v2 leakage repair, overall verdict: FAIL)
+
+---
+
+## 1. Motivation
+
+### 1.1 Corrected v2 Leakage Results
+
+The v2 leakage evaluator (`analysis/run_leakage_eval.py`, original version)
+contained five defects that produced incorrect per-regime verdicts and
+non-reconciling counts. The corrected evaluator (same file, updated version)
+fixes all five defects. Full comparison: `analysis/leakage_v2_corrected_report.md`.
+
+**Defects corrected:**
+
+| # | Defect | Impact |
+|---|--------|--------|
+| a | Per-regime verdicts missing on audit split | Audit per-regime status was unknown |
+| b | Per-regime classifiers refit per regime | Aggregate/regime counts didn't reconcile |
+| c | Majority baseline recomputed per regime | 875 agg vs 1,387 regime sum (off by 512) |
+| d | Chance = 1/mean(n_options) instead of mean(1/n_options) | Threshold off by 0.00365 |
+| e | Features used generator-internal `supports`/`contradicts`/`diagnostic_value` | Classifier saw information invisible to evaluated model |
+
+**Corrected v2 per-regime pass counts (held-out / final-audit):**
+
+| Regime | Held-out PASS | Final-audit PASS |
+|--------|---------------|------------------|
+| CLEAN | 11/11 | 5/11 |
+| DECOY | 11/11 | 4/11 |
+| CONFLICT | 11/11 | 0/11 |
+| INSUFFICIENT | 5/11 | 5/11 |
+
+### 1.2 Retraction of Prior Claims
+
+**Retracted claim (AMENDMENT-001 section 6.7):**
+
+> "For CLEAN and DECOY regimes, T2 v2 passes all 11 baselines."
+
+This claim was outcome-dependent and is retracted for the final-audit split.
+The corrected evaluator shows:
+- CLEAN final-audit: 5/11 PASS (6 fail due to wide Wilson CIs at N=250)
+- DECOY final-audit: 4/11 PASS (7 fail due to wide Wilson CIs at N=250)
+- CONFLICT final-audit: 0/11 PASS (all fail; N=125 too small for equivalence)
+
+The held-out split (N=5,250) retains CLEAN 11/11, DECOY 11/11, CONFLICT 11/11
+with the corrected evaluator, indicating that the audit failures are primarily a
+statistical power issue (per-regime N too small for equivalence testing) rather
+than evidence of true leakage.
+
+**Retracted claim (AMENDMENT-001 section 6.3):**
+
+> CONFLICT: "8_length_feature FAIL" and "11_combined_shallow FAIL"
+
+After feature hygiene correction (removing generator-internal `supports`/`contradicts`
+from structured features), both CONFLICT baselines now PASS on the held-out split
+(8_length acc=0.343, CI upper=0.375 < threshold=0.383; 11_combined acc=0.351,
+CI upper=0.383 <= threshold=0.383).
+
+### 1.3 Outcome-Dependent Interpretation Relabeling
+
+AMENDMENT-001 section 6.7 contained an outcome-dependent validity judgment:
+
+> "since INSUFFICIENT items test whether models recognize epistemic limits
+> [...] the structural identifiability is *not a confound for the primary
+> research question*"
+
+This interpretation was written after observing the results and is therefore
+**post-hoc**. It is hereby relabeled as:
+
+**POST-HOC INTERPRETATION (not pre-registered):** The above judgment about
+whether the INSUFFICIENT structural leak constitutes a confound was formulated
+after seeing that INSUFFICIENT items failed. A pre-registered study should not
+present outcome-dependent interpretations as pre-specified. The appropriate
+pre-specified response is to fix the structural identifiability in T2 v3 (below)
+and evaluate the fix, not to argue that the failure doesn't matter.
+
+### 1.4 Remaining v2 Failures Requiring T2 v3
+
+1. **INSUFFICIENT structural abstention leak:** The "Cannot be determined"
+   gold answer and 4th hypothesis option appear ONLY on INSUFFICIENT items
+   in v2, making them trivially identifiable by any classifier (100% accuracy).
+   The answer format is categorically different from other regimes.
+
+2. **Audit per-regime power insufficiency:** Per-regime final-audit Ns
+   (250/250/125/125) are too small for reliable equivalence testing at the
+   chance+0.05 margin, producing wide CIs and spurious per-regime FAILs
+   even when point estimates are at or below chance.
+
+3. **Unequal regime sizes:** CONFLICT and INSUFFICIENT each have half the
+   items of CLEAN and DECOY (875 vs 1,750 in train; 125 vs 250 in audit),
+   reducing per-regime statistical power for the smaller regimes.
+
+---
+
+## 2. T2 v3 Generator Design (PRE-SPECIFIED)
+
+**These design decisions are specified BEFORE any T2 v3 items are generated
+or evaluated. They constitute the pre-specified generator requirements.**
+
+### 2.1 Universal 4-Option Format
+
+**EVERY** item in **EVERY** regime has exactly **4 answer options**:
+- 3 suspect hypotheses (e.g., "Alice is responsible")
+- 1 abstention option: "Cannot be determined from available evidence"
+
+This eliminates the v2 structural leak where option count (3 vs 4) identified
+the regime. Chance level is exactly 0.25 for all items and regimes.
+
+### 2.2 Randomized Option Positions
+
+All 4 option positions are **randomized independently on every item**,
+INCLUDING the abstention option. The abstention option must NOT be pinned
+to any fixed index (e.g., always index 3 as in v2).
+
+**Invariant:** Within each regime, the correct-answer position must be
+uniformly distributed over {0, 1, 2, 3}. Verified by chi-squared test
+(p > 0.05) per regime over any generated batch of >= 100 items.
+
+### 2.3 Equal Regime Sizes
+
+All four regimes have equal N:
+- Train/held-out: N_per_regime items each (total = 4 * N_per_regime)
+- Final-audit: N_audit_per_regime items each (total = 4 * N_audit_per_regime)
+
+N_per_regime and N_audit_per_regime are determined by the power simulation
+(section 3.2) before generation.
+
+### 2.4 CONFLICT Length Counterbalancing
+
+Evidence item lengths are matched across suspects within each item with a
+tighter tolerance than v2, to eliminate the residual length imbalance
+observed in v2 CONFLICT items.
+
+### 2.5 Template-Cue and Regime-Vocabulary Tests
+
+Two additional leakage tests are added to the battery:
+
+1. **Template-family classifier:** Can a classifier predict which template
+   family generated an item from model-visible text alone? If so, template
+   cues leak structural information. (This is evaluated but not gated —
+   it is an informational diagnostic.)
+
+2. **Regime-identifying vocabulary test:** After removing suspect names,
+   can a TF-IDF classifier predict the regime from the remaining text?
+   If regime is identifiable from vocabulary, the generator's regime-specific
+   language patterns leak. **Gate:** CI upper bound for regime-classification
+   accuracy must be <= 0.25 + 0.05 = 0.30.
+
+### 2.6 Preserved v2 Counterbalancing Invariants
+
+All v2 counterbalancing invariants are preserved:
+- Name-frequency equalization (CV <= 0.10)
+- Evidence-count parity per suspect
+- Clue-polarity balance (within ±1)
+- Counterfactual minimal pairs (Jaccard >= 0.85)
+- Positional uniformity (chi-squared p > 0.05)
+
+---
+
+## 3. Gate and Audit Procedure (PRE-SPECIFIED)
+
+### 3.1 Per-Regime Equivalence Gate
+
+For EACH baseline, on BOTH the template-held-out split AND the final-audit split,
+for EACH regime individually AND in aggregate:
+
+**PASS criterion:** Wilson 95% CI upper bound for accuracy <= chance + 0.05
+
+Where chance = mean(1/n_options) per item = 0.25 under universal 4-option design.
+
+Gate semantics: every cell in the {baseline} x {regime} x {split} matrix must
+PASS. A single FAIL means the overall verdict is FAIL.
+
+### 3.2 Audit-N Power Simulation
+
+**Before generating the final-audit set**, run an equivalence-gate power
+simulation to determine the minimum per-regime N such that:
+
+P(PASS | true accuracy = chance) >= target_power
+
+for every baseline. Report the required N at three power targets:
+
+| Target power | Per-regime N | Total audit N |
+|-------------|--------------|---------------|
+| 0.80 | [to be computed] | [to be computed] |
+| 0.90 | [to be computed] | [to be computed] |
+| 0.95 | [to be computed] | [to be computed] |
+
+**Default target:** P(PASS | true chance) >= 0.90 per baseline.
+
+The computed per-regime audit N is FROZEN before generating the fresh audit set.
+
+### 3.3 Fresh Final-Audit Set
+
+- A genuinely fresh, untouched reserved template family is created for the
+  v3 final audit.
+- The v2 final audit (contamination_timeline, 750 items) is SPENT and will
+  NOT be reused for tuning or evaluation.
+- The v3 audit template family is generated, sealed, and not opened until
+  the single audit evaluation run.
+
+### 3.4 Reconciliation Requirement
+
+The evaluator must enforce, for every baseline on both splits:
+
+```
+assert sum(per_regime_correct) == aggregate_correct
+```
+
+Any reconciliation failure causes the run to abort with an error.
+
+---
+
+## 4. Statistical Design Corrections (PRE-SPECIFIED)
+
+### 4.1 Estimable Contrasts
+
+The original protocol specified unconditional E, T, D main effects and a
+three-way E×T×D interaction. This is incorrect: E=0 cells with T=1 or D=1
+are incoherent (one cannot tabulate or disconfirm without first enumerating
+hypotheses). Only 5 of the 8 E/T/D cells are coherent: 000, 100, 110, 101, 111.
+
+**Corrected estimands:**
+
+| # | Contrast | Operationalization |
+|---|----------|--------------------|
+| 1 | Enumeration | 100 vs 000 |
+| 2 | T\|E=1 | mean(110, 111) vs mean(100, 101) |
+| 3 | D\|E=1 | mean(101, 111) vs mean(100, 110) |
+| 4 | T×D\|E=1 | (111 − 110) − (101 − 100) |
+
+**Removed:** Unconditional E, T, D main effects; E×T×D three-way interaction.
+
+### 4.2 Model as Fixed Effect
+
+With only 2-3 model families, model is treated as a fixed effect. The former
+`(1|model)` random effect specification is withdrawn. Model-specific estimates
+are reported; no generalization claim is made beyond the tested models.
+
+**Updated statistical model** (conditional on E=1 cells):
+
+```
+logit(P(correct)) ~ T * D + regime + model + (1 | item)
+```
+
+### 4.3 Call-Matching Relabel
+
+The 111 vs prism_full comparison was labeled "call-matched" but 111 uses 1
+API call while prism_full uses 4. This is relabeled as "decomposition vs
+scaffolding" — a comparison of reasoning strategies, not a cost-matched control.
+
+---
+
+## 5. Version Tracking
+
+### 5.1 Superseded v2 Hashes (from AMENDMENT-001)
+
+| File | SHA-256 (v2, superseded) |
+|------|--------------------------|
+| datasets/t2_generator/generator.py | f6cc03f405dd84794eb24314c01d696bbb9fa73dfac163558d0e1d1c5c12c62c |
+| analysis/leakage_check.py | 1c16152e390f36ee0091e12d1f18f9b92643b5ee075c6c56c065f59751e23fe4 |
+
+### 5.2 Corrected Evaluator Hash (Phase A)
+
+| File | SHA-256 |
+|------|---------|
+| analysis/run_leakage_eval.py (corrected) | [to be computed at freeze time] |
+
+### 5.3 v3 Hashes (to be added in Phase B)
+
+Reserved for:
+- datasets/t2_generator/generator.py (v3)
+- analysis/run_leakage_eval.py (v3-compatible)
+- T2 v3 train corpus
+- T2 v3 final-audit corpus
+
+These hashes will be computed and recorded when the v3 generator is frozen,
+BEFORE generating the final-audit set.
+
+---
+
+## 6. Governance
+
+### 6.1 Pre-Outcome Status
+
+This amendment is filed BEFORE:
+- Any T2 v3 items are generated
+- Any T2 v3 evaluation is run
+- The v3 final-audit set exists
+
+All design decisions in sections 2-4 are pre-specified. If the v3 evaluation
+fails, the failure will be reported honestly without further tuning, per the
+same governance rules as AMENDMENT-001 section 4.3.
+
+### 6.2 Relationship to AMENDMENT-001
+
+AMENDMENT-001 remains the authoritative record of:
+- The T2 v1 leakage findings (section 1)
+- The T2 v2 generator design (section 3)
+- The pre-specified v2 acceptance criteria (section 4)
+- The v2 evaluation outcomes (section 6)
+
+AMENDMENT-002 does NOT modify or delete any AMENDMENT-001 text. It:
+- Corrects the evaluator defects (section 1.1)
+- Retracts specific outcome-dependent claims (section 1.2)
+- Relabels post-hoc interpretation as post-hoc (section 1.3)
+- Specifies the v3 design pre-outcome (sections 2-4)
+
+### 6.3 PROTOCOL.lock.json
+
+The PROTOCOL.lock.json file is a frozen hash-locked artifact. Per the
+append-only amendment pattern established by AMENDMENT-001:
+- Existing v2 hashes in `file_hashes` and `superseded_hashes` are PRESERVED
+- New v3 hashes will be ADDED alongside (not replacing) when v3 is frozen
+- The lock file's `notes` and `amendment` fields will be updated to reference
+  AMENDMENT-002
+
+This update will occur in the Phase B commit when the v3 generator is frozen,
+not in this Phase A commit.
+
+---
+
+**Filed by:** Automated Phase A build
+**Governance note:** This amendment documents pre-specified design decisions
+for T2 v3. The acceptance criteria (sections 2-3) are specified before any
+v3 items exist. The evaluator corrections (section 1) are applied to the
+existing v2 data to establish accurate baselines.
