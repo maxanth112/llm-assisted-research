@@ -5,7 +5,8 @@ Generate hand-auditable worked examples for all 11 leakage baselines.
 Produces analysis/leakage_worked_examples.md showing step-by-step
 computation for each baseline on a single concrete item.
 
-Phase A.2 Work Item 5.
+Phase A.2 Work Item 5 (cleanup: now includes actual trained predictions
+for baselines 6-11, not just input features).
 """
 import sys, os, json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -17,7 +18,158 @@ from analysis.run_leakage_eval import (
     _compute_candidate_features, wilson_ci,
     pred_majority, pred_position, pred_mention_count,
     pred_evidence_count, pred_lexical_overlap,
+    pred_tfidf_word, pred_tfidf_char, pred_length,
+    pred_mention_evidence, pred_first_mention_order, pred_combined,
 )
+
+
+def make_training_items():
+    """Create a small set of training items for trained baseline examples.
+
+    These are used as the training split for baselines 6-11 which require
+    fitting a classifier. The training set is deliberately small and balanced
+    to make the worked example tractable to audit by hand.
+    """
+    items = []
+    # Training item 1: Gold = suspect 0
+    items.append({
+        "id": "train_001",
+        "regime": "CLEAN",
+        "narrative": ("A robbery occurred at the jewelry store on Monday morning. "
+                      "Three suspects were identified: David Park, Elena Rodriguez, "
+                      "and Frank Wilson. The alarm was triggered at 8:45 AM."),
+        "question": "Who committed the robbery?",
+        "hypotheses": [
+            "David Park is responsible",
+            "Elena Rodriguez is responsible",
+            "Frank Wilson is responsible",
+        ],
+        "evidence": [
+            {"id": "T001", "content": "David Park was seen near the store entrance at 8:40 AM by a security camera."},
+            {"id": "T002", "content": "Elena Rodriguez was at a doctor's appointment during the robbery, confirmed by medical records."},
+            {"id": "T003", "content": "Frank Wilson had no prior connection to the jewelry store."},
+            {"id": "T004", "content": "David Park's fingerprints were found on the display case."},
+        ],
+        "gold_answer": "David Park is responsible",
+        "gold_reasoning": "Direct physical evidence links David Park.",
+        "metadata": {"template": "train_template_A"},
+    })
+    # Training item 2: Gold = suspect 1
+    items.append({
+        "id": "train_002",
+        "regime": "CLEAN",
+        "narrative": ("A data breach was discovered at the tech company on Friday. "
+                      "Three employees had admin access: Grace Kim, Henry Liu, "
+                      "and Iris Johnson. The breach occurred between 2-4 PM."),
+        "question": "Who caused the data breach?",
+        "hypotheses": [
+            "Grace Kim is responsible",
+            "Henry Liu is responsible",
+            "Iris Johnson is responsible",
+        ],
+        "evidence": [
+            {"id": "T005", "content": "Grace Kim was in a meeting from 1 PM to 5 PM, confirmed by five colleagues."},
+            {"id": "T006", "content": "Henry Liu's access logs show database queries at 2:30 PM and 3:15 PM."},
+            {"id": "T007", "content": "Iris Johnson was working remotely from a different city that day."},
+            {"id": "T008", "content": "Henry Liu had recently been denied a promotion and expressed frustration."},
+        ],
+        "gold_answer": "Henry Liu is responsible",
+        "gold_reasoning": "Access logs and motive point to Henry Liu.",
+        "metadata": {"template": "train_template_B"},
+    })
+    # Training item 3: Gold = suspect 2
+    items.append({
+        "id": "train_003",
+        "regime": "DECOY",
+        "narrative": ("A valuable painting was stolen from the gallery overnight. "
+                      "Three people had keys: Jack Chen, Karen White, "
+                      "and Leo Brown. The security system was disabled at 11 PM."),
+        "question": "Who stole the painting?",
+        "hypotheses": [
+            "Jack Chen is responsible",
+            "Karen White is responsible",
+            "Leo Brown is responsible",
+        ],
+        "evidence": [
+            {"id": "T009", "content": "Jack Chen was attending a concert that evening with tickets as proof."},
+            {"id": "T010", "content": "Karen White mentioned wanting the painting but has a solid alibi."},
+            {"id": "T011", "content": "Leo Brown's car was spotted in the gallery parking lot at 11:05 PM."},
+            {"id": "T012", "content": "Leo Brown had recently taken out a large insurance policy."},
+        ],
+        "gold_answer": "Leo Brown is responsible",
+        "gold_reasoning": "Physical presence and financial motive point to Leo Brown.",
+        "metadata": {"template": "train_template_C"},
+    })
+    # Training item 4: Gold = suspect 0
+    items.append({
+        "id": "train_004",
+        "regime": "DECOY",
+        "narrative": ("An explosion damaged the chemical plant on Wednesday. "
+                      "Three technicians were on duty: Maria Santos, Nathan Gray, "
+                      "and Olivia Reed. The blast occurred in sector 7."),
+        "question": "Who caused the explosion?",
+        "hypotheses": [
+            "Maria Santos is responsible",
+            "Nathan Gray is responsible",
+            "Olivia Reed is responsible",
+        ],
+        "evidence": [
+            {"id": "T013", "content": "Maria Santos was last seen entering sector 7 at 3:20 PM."},
+            {"id": "T014", "content": "Nathan Gray was working in sector 2, far from the blast site."},
+            {"id": "T015", "content": "Olivia Reed had reported safety concerns about sector 7 earlier that week."},
+            {"id": "T016", "content": "Maria Santos had modified the pressure valve settings without authorization."},
+        ],
+        "gold_answer": "Maria Santos is responsible",
+        "gold_reasoning": "Unauthorized modifications and presence at scene.",
+        "metadata": {"template": "train_template_D"},
+    })
+    # Training item 5: Gold = suspect 1
+    items.append({
+        "id": "train_005",
+        "regime": "CONFLICT",
+        "narrative": ("Money went missing from the charity fund on Thursday. "
+                      "Three board members had access: Paul Anderson, Quinn Taylor, "
+                      "and Rachel Davis. The discrepancy was $50,000."),
+        "question": "Who took the money?",
+        "hypotheses": [
+            "Paul Anderson is responsible",
+            "Quinn Taylor is responsible",
+            "Rachel Davis is responsible",
+        ],
+        "evidence": [
+            {"id": "T017", "content": "Paul Anderson had recently made large personal purchases."},
+            {"id": "T018", "content": "Quinn Taylor's personal account received a $50,000 deposit on Friday."},
+            {"id": "T019", "content": "Rachel Davis was traveling abroad during the period in question."},
+            {"id": "T020", "content": "Quinn Taylor had access to the fund transfer system."},
+        ],
+        "gold_answer": "Quinn Taylor is responsible",
+        "gold_reasoning": "Matching deposit and system access.",
+        "metadata": {"template": "train_template_E"},
+    })
+    # Training item 6: Gold = suspect 2
+    items.append({
+        "id": "train_006",
+        "regime": "CONFLICT",
+        "narrative": ("Confidential documents were leaked to the press. "
+                      "Three executives had clearance: Sam Morgan, Tina Chen, "
+                      "and Victor Hall. The leak occurred last Tuesday."),
+        "question": "Who leaked the documents?",
+        "hypotheses": [
+            "Sam Morgan is responsible",
+            "Tina Chen is responsible",
+            "Victor Hall is responsible",
+        ],
+        "evidence": [
+            {"id": "T021", "content": "Sam Morgan had no motive and cooperated fully with the investigation."},
+            {"id": "T022", "content": "Tina Chen's email account showed suspicious forwarding rules set up Monday."},
+            {"id": "T023", "content": "Victor Hall was seen meeting with a journalist at a cafe on Tuesday morning."},
+            {"id": "T024", "content": "Victor Hall's computer contained copies of the leaked documents in a hidden folder."},
+        ],
+        "gold_answer": "Victor Hall is responsible",
+        "gold_reasoning": "Meeting with journalist and document copies on computer.",
+        "metadata": {"template": "train_template_F"},
+    })
+    return items
 
 
 def make_example_item():
@@ -164,6 +316,22 @@ def generate_examples():
     lines.append(f"- **Correct:** {pred[0] == gi}")
     lines.append("")
 
+    # ---- Trained baselines: create training set ----
+    train_items = make_training_items()
+    test_items = [item]
+
+    lines.append("---")
+    lines.append("## Training Items for Baselines 6-11")
+    lines.append("")
+    lines.append("Baselines 6-11 require a train/test split. The following 6 training")
+    lines.append("items are used (the test item is the example item above):")
+    lines.append("")
+    for ti in train_items:
+        ti_gi = gold_index(ti)
+        lines.append(f"- **{ti['id']}** (regime={ti['regime']}, gold=index {ti_gi}: "
+                      f"\"{ti['gold_answer']}\")")
+    lines.append("")
+
     # ---- Baselines 6-7: TF-IDF (TARGET-normalized) ----
     lines.append("---")
     lines.append("## 6. TF-IDF Word (`pred_tfidf_word`)")
@@ -184,10 +352,15 @@ def generate_examples():
     lines.append("in A.1, all rows had identical context (candidate name differences")
     lines.append("cancelled in TF-IDF).")
     lines.append("")
-    lines.append("**Training:** Requires a train/test split (template-held-out CV).")
-    lines.append("The classifier learns whether TARGET-implicated context predicts")
-    lines.append("goldness. In a non-leaking corpus, TARGET mentions are balanced")
-    lines.append("across gold/non-gold rows → accuracy ≈ chance.")
+
+    # Actual trained prediction
+    pred_word = pred_tfidf_word(train_items, test_items)
+    lines.append(f"**Trained prediction:** index {pred_word[0]} → \"{item['hypotheses'][pred_word[0]]}\"")
+    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {pred_word[0] == gi}")
+    lines.append("")
+    lines.append("**Why at chance if no leak:** In a non-leaking corpus, TARGET mentions are")
+    lines.append("balanced across gold/non-gold rows → classifier learns nothing → ~1/K.")
     lines.append("")
 
     lines.append("---")
@@ -197,6 +370,13 @@ def generate_examples():
     lines.append("This catches subword patterns that word-level TF-IDF misses.")
     lines.append("")
     lines.append("**Same TARGET normalization as baseline 6** (only the vectorizer differs).")
+    lines.append("")
+
+    # Actual trained prediction
+    pred_char = pred_tfidf_char(train_items, test_items)
+    lines.append(f"**Trained prediction:** index {pred_char[0]} → \"{item['hypotheses'][pred_char[0]]}\"")
+    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {pred_char[0] == gi}")
     lines.append("")
 
     # ---- Baselines 8-11: Structured features (TARGET-normalized) ----
@@ -209,12 +389,20 @@ def generate_examples():
     lines.append("")
     lines.append("**Structured features for this item (TARGET-normalized):**")
     lines.append("")
+    feat_names_all = ['mention_count', 'evidence_count', 'length_sum', 'first_mention_pos']
     for j in range(len(item["hypotheses"])):
         feats = _compute_candidate_features(item, j)
         lines.append(f"  - Candidate {j} ({names[j]} → TARGET):")
         lines.append(f"    length_sum = {feats['length_sum']}")
     lines.append("")
     lines.append("**Training uses columns [4, 5]** = target_length_sum, delta_length_sum.")
+    lines.append("")
+
+    # Actual trained prediction
+    pred_len = pred_length(train_items, test_items)
+    lines.append(f"**Trained prediction:** index {pred_len[0]} → \"{item['hypotheses'][pred_len[0]]}\"")
+    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {pred_len[0] == gi}")
     lines.append("")
 
     lines.append("---")
@@ -227,6 +415,13 @@ def generate_examples():
         feats = _compute_candidate_features(item, j)
         lines.append(f"  - Candidate {j} ({names[j]} → TARGET):")
         lines.append(f"    mention_count={feats['mention_count']}, evidence_count={feats['evidence_count']}")
+    lines.append("")
+
+    # Actual trained prediction
+    pred_me = pred_mention_evidence(train_items, test_items)
+    lines.append(f"**Trained prediction:** index {pred_me[0]} → \"{item['hypotheses'][pred_me[0]]}\"")
+    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {pred_me[0] == gi}")
     lines.append("")
 
     lines.append("---")
@@ -244,6 +439,13 @@ def generate_examples():
     lines.append("**Training uses columns [6, 7]** = target_first_mention_pos, delta_first_mention_pos.")
     lines.append("")
 
+    # Actual trained prediction
+    pred_fmo = pred_first_mention_order(train_items, test_items)
+    lines.append(f"**Trained prediction:** index {pred_fmo[0]} → \"{item['hypotheses'][pred_fmo[0]]}\"")
+    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {pred_fmo[0] == gi}")
+    lines.append("")
+
     lines.append("---")
     lines.append("## 11. Combined Shallow (`pred_combined`)")
     lines.append("")
@@ -253,17 +455,23 @@ def generate_examples():
     lines.append("")
     lines.append("**Full feature vector for this item:**")
     lines.append("")
-    feat_names = ['mention_count', 'evidence_count', 'length_sum', 'first_mention_pos']
     for j in range(len(item["hypotheses"])):
         feats = _compute_candidate_features(item, j)
         others = [_compute_candidate_features(item, k) for k in range(len(item["hypotheses"])) if k != j]
         row = []
-        for fn in feat_names:
+        for fn in feat_names_all:
             t_val = feats[fn]
             o_mean = np.mean([o[fn] for o in others])
             row.append(f"{fn}_t={t_val:.3f}")
             row.append(f"{fn}_d={t_val - o_mean:.3f}")
         lines.append(f"  - Candidate {j}: [{', '.join(row)}]")
+    lines.append("")
+
+    # Actual trained prediction
+    pred_comb = pred_combined(train_items, test_items)
+    lines.append(f"**Trained prediction:** index {pred_comb[0]} → \"{item['hypotheses'][pred_comb[0]]}\"")
+    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {pred_comb[0] == gi}")
     lines.append("")
     lines.append("**Why at chance if no leak:** When evidence is balanced across candidates")
     lines.append("(each mentioned equally regardless of who is guilty), all features are")

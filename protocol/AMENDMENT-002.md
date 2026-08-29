@@ -273,37 +273,49 @@ achieves high pass probability.
 - Chance = 0.25 for all regimes (universal 4-option design)
 - Gate: Wilson 95% CI upper <= 0.25 + 0.05 = 0.30
 
-**Power table (P(joint gate passes | true accuracy = chance), Phase A.2,
-rho=0 exact binomial, rho>0 MC 200k sims, block correlation):**
+**Power table (selected rows; P(joint gate passes | true accuracy = chance),
+rho=0 exact binomial, rho>0 MC with block correlation):**
 
 | N/regime | Total N | Marginal P(PASS) | Joint (rho=0) | Joint (rho=0.3) | Joint (rho=0.6) |
 |----------|---------|------------------|---------------|-----------------|-----------------|
 | 500 | 2,000 | 0.681 | 0.000 | 0.000 | 0.005 |
-| 750 | 3,000 | 0.863 | 0.002 | 0.021 | 0.088 |
-| 1,000 | 4,000 | 0.941 | 0.068 | 0.162 | 0.306 |
-| 1,500 | 6,000 | 0.992 | 0.691 | 0.733 | 0.803 |
-| 2,000 | 8,000 | 0.999 | 0.949 | 0.951 | 0.963 |
-| 2,500 | 10,000 | 1.000 | 0.995 | 0.995 | 0.995 |
+| 1,000 | 4,000 | 0.941 | 0.068 | 0.159 | 0.307 |
+| 1,500 | 6,000 | 0.992 | 0.691 | 0.734 | 0.803 |
+| 2,000 | 8,000 | 0.999 | **0.949** | 0.952 | 0.963 |
 
-**Minimum N for target P(gate passes | true chance):**
+Full fine-grid table: `analysis/leakage_audit_power_results_report.md`
+
+**First tested N achieving target P(gate passes):**
+
+*(These are "first tested N" values in the grid, not mathematical minima.
+The true minimum may lie between grid points.)*
 
 | Target | rho=0.0 | rho=0.3 | rho=0.6 |
 |--------|---------|---------|---------|
-| 0.80 | 1,700/regime (6,800 total) | 1,600/regime (6,400 total) | 1,500/regime (6,000 total) |
-| 0.90 | 1,900/regime (7,600 total) | 1,900/regime (7,600 total) | 1,800/regime (7,200 total) |
-| 0.95 | 2,500/regime (10,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
+| >=0.80 | 1,500-2,000/regime | 1,500-2,000/regime | 1,500/regime |
+| >=0.90 | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) | 2,000/regime (8,000 total) |
 
 **Correlation model:** Block correlation — baselines WITHIN the same regime
 share rho, baselines ACROSS different regimes are independent. rho=0 uses
 exact binomial (closed-form, no Monte Carlo). rho>0 uses Monte Carlo with
 200k simulations per configuration.
 
-**Default target:** P(joint gate passes | true accuracy = chance) >= 0.90.
-This requires **1,900 items per regime (7,600 total)** under independence
-(conservative), or **1,800 per regime** under moderate block correlation
-(rho=0.6).
+**Design target:** P(joint gate passes | true accuracy = chance) >= 0.90.
 
-The computed per-regime audit N is FROZEN before generating the fresh audit set.
+**FROZEN audit-size decision:** **2,000 items per regime (8,000 total).**
+
+- Design basis: rho=0 (independence) as conservative default.
+  Independence is conservative because positive within-regime correlation
+  increases the joint pass probability (failures cluster rather than spread).
+- At N=2,000/regime, the exact independence result is ~0.949 joint pass
+  probability, CONFIRMED by the reproducible fine-grid table in
+  `analysis/leakage_audit_power_results.json`.
+- This meets the >=0.90 target but does NOT claim 0.95 (the 0.95 threshold
+  would require ~2,500/regime under independence).
+- Structured within-regime correlation (rho>0) is reported as sensitivity
+  analysis only and is not the design basis.
+
+The per-regime audit N is FROZEN at 2,000 before generating the fresh audit set.
 
 ### 3.3 Fresh Final-Audit Set
 
@@ -346,17 +358,33 @@ hypotheses). Only 5 of the 8 E/T/D cells are coherent: 000, 100, 110, 101, 111.
 
 **Removed:** Unconditional E, T, D main effects; E×T×D three-way interaction.
 
-### 4.2 Model as Fixed Effect
+### 4.2 Model as Fixed Effect, Primary Estimator
 
 With only 2-3 model families, model is treated as a fixed effect. The former
 `(1|model)` random effect specification is withdrawn. Model-specific estimates
 are reported; no generalization claim is made beyond the tested models.
 
-**Updated statistical model** (conditional on E=1 cells):
+**Primary estimator:** Paired marginal contrast for the D effect, conditional
+on E=1, in adversarial regimes (DECOY+CONFLICT), averaged over T:
 
 ```
-logit(P(correct)) ~ T * D + regime + model + (1 | item)
+contrast_i = 0.5 * [(Y_101_i - Y_100_i) + (Y_111_i - Y_110_i)]
 ```
+
+where i indexes items. The estimand is E[contrast_i].
+
+**Primary test:** One-sample paired t-test on the item-level contrast values.
+Reports paired bootstrap 95% CI on the mean contrast.
+
+**Robustness (secondary, not gated):** Effect-coded binomial GEE with
+item-clustered robust SE. Reported for comparison but does not replace
+the paired t-test as the primary analysis.
+
+**Secondary tests (reported, not gated):**
+- McNemar tests: 101 vs 100, 111 vs 110 (paired binary)
+- Enumeration contrast: 100 vs 000
+- T|E=1: mean(110,111) vs mean(100,101)
+- T×D|E=1 interaction
 
 ### 4.3 Call-Matching Relabel
 

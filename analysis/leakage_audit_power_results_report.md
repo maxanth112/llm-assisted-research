@@ -54,24 +54,59 @@ P(ALL baselines x regimes pass simultaneously | true accuracy = chance)
 | 1700 | 6800 | 0.995779 | 0.830159 | 0.848385 | 0.887070 |
 | 1800 | 7200 | 0.997232 | 0.885176 | 0.896335 | 0.920900 |
 | 1900 | 7600 | 0.998186 | 0.923203 | 0.928615 | 0.946135 |
-| 2000 | 8000 | 0.998811 | 0.949003 | 0.951460 | 0.963015 |
-| 2500 | 10000 | 0.999880 | 0.994719 | 0.994965 | 0.995405 |
-| 3000 | 12000 | 0.999986 | 0.999364 | 0.999380 | 0.999495 |
+| 1925 | 7700 | 0.998559 | 0.938541 | 0.942125 | 0.956145 |
+| 1950 | 7800 | 0.998649 | 0.942244 | 0.946090 | 0.957960 |
+| 1975 | 7900 | 0.998733 | 0.945727 | 0.949090 | 0.960690 |
+| 2000 | 8000 | 0.998811 | 0.949003 | 0.950730 | 0.962585 |
+| 2025 | 8100 | 0.999057 | 0.959353 | 0.961680 | 0.970090 |
+| 2050 | 8200 | 0.999116 | 0.961813 | 0.963880 | 0.971595 |
+| 2075 | 8300 | 0.999170 | 0.964125 | 0.966395 | 0.972835 |
+| 2100 | 8400 | 0.999221 | 0.966297 | 0.968225 | 0.975285 |
+| 2125 | 8500 | 0.999383 | 0.973218 | 0.974730 | 0.979800 |
+| 2150 | 8600 | 0.999421 | 0.974840 | 0.976570 | 0.981145 |
+| 2500 | 10000 | 0.999880 | 0.994719 | 0.994785 | 0.995485 |
+| 3000 | 12000 | 0.999986 | 0.999364 | 0.999320 | 0.999485 |
 
-## Minimum N for Target P(gate passes)
+## First Tested N Achieving Target P(gate passes)
+
+**Note:** These are the smallest N values *in the tested grid* that
+achieve the target. The true mathematical minimum may lie between grid
+points. Values should be interpreted as sufficient, not necessary.
 
 | Target | rho=0.0 (N/regime) | rho=0.3 (N/regime) | rho=0.6 (N/regime) |
 |---|---|---|---|
 | 0.80 | 1700 (total=6800) | 1600 (total=6400) | 1500 (total=6000) |
 | 0.90 | 1900 (total=7600) | 1900 (total=7600) | 1800 (total=7200) |
-| 0.95 | 2500 (total=10000) | 2000 (total=8000) | 2000 (total=8000) |
+| 0.95 | 2025 (total=8100) | 2000 (total=8000) | 1925 (total=7700) |
+
+## FROZEN Audit-Size Decision
+
+**FROZEN:** 2,000 items per regime, 8,000 total.
+
+- Target: P(overall leakage gate passes | every baseline's true accuracy = chance) >= 0.90
+- Design basis: rho=0 (independence) as conservative default
+- At N=2,000/regime under rho=0: joint pass probability ~0.949
+- This meets the >=0.90 target but does NOT claim 0.95
+- Structured within-regime correlation (rho>0) is reported as sensitivity analysis only
+
+## Aggregate Gate Cells
+
+The per-regime gate is modeled above with 44 cells (11 baselines x 4 regimes).
+The full gate additionally includes aggregate cells (11 baselines on all items pooled).
+At N=8,000 total (2,000/regime), the marginal pass probability for each aggregate
+baseline (N=8,000 at chance=0.25, margin=0.05) is effectively 1.0:
+
+- Marginal P(PASS) for one aggregate baseline at N=8,000: 1.000000
+- Joint P(all 11 aggregate baselines pass): 1.000000
+- Including aggregate cells does not alter the selected design point (2,000/regime)
 
 ## Notes
 
 - **Marginal P(PASS)**: probability that ONE baseline on ONE regime passes
 - **Joint**: probability that ALL (baselines x regimes) pass simultaneously
 - rho=0 (independence): exact binomial computation, no Monte Carlo
-- rho>0: block correlation (within-regime baselines correlated, across-regime independent)
-- Higher correlation increases joint probability (failures cluster)
+- Independence is the CONSERVATIVE default for the joint gate — positive
+  correlation increases joint pass probability (failures cluster)
+- rho>0: block correlation as sensitivity analysis only
 - Only the audit split is modeled; held-out split passes with ~1.0
 - v3 universal 4-option design: chance=0.25 for all regimes

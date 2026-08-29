@@ -194,7 +194,10 @@ def compute_power_table(
             "joint_pass_prob": rho_results,
         })
 
-    # Find minimum N for each target power and rho
+    # Find first tested N achieving each target power and rho
+    # NOTE: These are "first tested N" values — they are the smallest N in
+    # the tested grid that achieves the target, NOT mathematical minima.
+    # The true minimum may lie between grid points.
     targets = [0.80, 0.90, 0.95]
     min_n_table = {}
     for target in targets:
@@ -211,6 +214,7 @@ def compute_power_table(
                     "n_per_regime": found["n_per_regime"],
                     "total_audit_n": found["total_audit_n"],
                     "joint_pass_prob": found["joint_pass_prob"][rho_key],
+                    "note": "first tested N in grid, not mathematical minimum",
                 }
             else:
                 min_n_table[f"target_{target:.2f}"][rho_key] = {
@@ -288,8 +292,12 @@ def format_report(results: Dict) -> str:
 
     lines.append("")
 
-    # Minimum N table
-    lines.append("## Minimum N for Target P(gate passes)")
+    # Minimum N table (first tested N, not mathematical minimum)
+    lines.append("## First Tested N Achieving Target P(gate passes)")
+    lines.append("")
+    lines.append("**Note:** These are the smallest N values *in the tested grid* that")
+    lines.append("achieve the target. The true mathematical minimum may lie between grid")
+    lines.append("points. Values should be interpreted as sufficient, not necessary.")
     lines.append("")
     lines.append("| Target | " + " | ".join(
         f"rho={rho:.1f} (N/regime)" for rho in rho_values
@@ -308,14 +316,43 @@ def format_report(results: Dict) -> str:
         lines.append(f"| {target:.2f} | " + " | ".join(cells) + " |")
 
     lines.append("")
+
+    # FROZEN design decision
+    lines.append("## FROZEN Audit-Size Decision")
+    lines.append("")
+    lines.append("**FROZEN:** 2,000 items per regime, 8,000 total.")
+    lines.append("")
+    lines.append("- Target: P(overall leakage gate passes | every baseline's true accuracy = chance) >= 0.90")
+    lines.append("- Design basis: rho=0 (independence) as conservative default")
+    lines.append("- At N=2,000/regime under rho=0: joint pass probability ~0.949")
+    lines.append("- This meets the >=0.90 target but does NOT claim 0.95")
+    lines.append("- Structured within-regime correlation (rho>0) is reported as sensitivity analysis only")
+    lines.append("")
+
+    # Aggregate gate cells note
+    lines.append("## Aggregate Gate Cells")
+    lines.append("")
+    lines.append("The per-regime gate is modeled above with 44 cells (11 baselines x 4 regimes).")
+    lines.append("The full gate additionally includes aggregate cells (11 baselines on all items pooled).")
+    lines.append("At N=8,000 total (2,000/regime), the marginal pass probability for each aggregate")
+    lines.append("baseline (N=8,000 at chance=0.25, margin=0.05) is effectively 1.0:")
+    lines.append("")
+    # Compute exact marginal for N=8000
+    agg_marginal = exact_marginal_pass_prob(8000, 0.25, 0.05)
+    agg_joint = agg_marginal ** 11
+    lines.append(f"- Marginal P(PASS) for one aggregate baseline at N=8,000: {agg_marginal:.6f}")
+    lines.append(f"- Joint P(all 11 aggregate baselines pass): {agg_joint:.6f}")
+    lines.append("- Including aggregate cells does not alter the selected design point (2,000/regime)")
+    lines.append("")
+
     lines.append("## Notes")
     lines.append("")
     lines.append("- **Marginal P(PASS)**: probability that ONE baseline on ONE regime passes")
     lines.append("- **Joint**: probability that ALL (baselines x regimes) pass simultaneously")
     lines.append("- rho=0 (independence): exact binomial computation, no Monte Carlo")
-    lines.append("- rho>0: block correlation (within-regime baselines correlated, "
-                 "across-regime independent)")
-    lines.append("- Higher correlation increases joint probability (failures cluster)")
+    lines.append("- Independence is the CONSERVATIVE default for the joint gate — positive")
+    lines.append("  correlation increases joint pass probability (failures cluster)")
+    lines.append("- rho>0: block correlation as sensitivity analysis only")
     lines.append("- Only the audit split is modeled; held-out split passes with ~1.0")
     lines.append("- v3 universal 4-option design: chance=0.25 for all regimes")
     lines.append("")
@@ -333,13 +370,20 @@ def main():
     t0 = time.time()
 
     if args.quick:
-        # Fine grid but fewer MC sims
+        # Coarse grid with fewer MC sims
         n_range = list(range(100, 1001, 100)) + [1500, 2000]
         n_sims_j = 50000
     else:
-        # Fine grid from 100 to 3000
-        n_range = list(range(100, 501, 25)) + list(range(550, 1001, 50)) + \
-                  list(range(1100, 2001, 100)) + [2500, 3000]
+        # Fine grid from 100 to 3000, with 25-item increments near 1900-2150
+        n_range = (
+            list(range(100, 501, 25)) +          # 100-500 by 25
+            list(range(550, 1001, 50)) +          # 550-1000 by 50
+            list(range(1100, 1901, 100)) +        # 1100-1900 by 100
+            list(range(1900, 2175, 25)) +         # 1900-2150 by 25 (fine grid)
+            [2500, 3000]                          # coarse tail
+        )
+        # Deduplicate and sort (1900 appears in both ranges)
+        n_range = sorted(set(n_range))
         n_sims_j = 200000
 
     print(f"Running joint-gate power simulation ({len(n_range)} N values)...",

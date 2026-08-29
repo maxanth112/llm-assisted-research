@@ -419,14 +419,113 @@
       }
     },
     {
+      "n_per_regime": 1925,
+      "total_audit_n": 7700,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.998559,
+      "joint_pass_prob": {
+        "rho_0.0": 0.938541,
+        "rho_0.3": 0.942125,
+        "rho_0.6": 0.956145
+      }
+    },
+    {
+      "n_per_regime": 1950,
+      "total_audit_n": 7800,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.998649,
+      "joint_pass_prob": {
+        "rho_0.0": 0.942244,
+        "rho_0.3": 0.94609,
+        "rho_0.6": 0.95796
+      }
+    },
+    {
+      "n_per_regime": 1975,
+      "total_audit_n": 7900,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.998733,
+      "joint_pass_prob": {
+        "rho_0.0": 0.945727,
+        "rho_0.3": 0.94909,
+        "rho_0.6": 0.96069
+      }
+    },
+    {
       "n_per_regime": 2000,
       "total_audit_n": 8000,
       "n_cells": 44,
       "marginal_pass_prob": 0.998811,
       "joint_pass_prob": {
         "rho_0.0": 0.949003,
-        "rho_0.3": 0.95146,
-        "rho_0.6": 0.963015
+        "rho_0.3": 0.95073,
+        "rho_0.6": 0.962585
+      }
+    },
+    {
+      "n_per_regime": 2025,
+      "total_audit_n": 8100,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.999057,
+      "joint_pass_prob": {
+        "rho_0.0": 0.959353,
+        "rho_0.3": 0.96168,
+        "rho_0.6": 0.97009
+      }
+    },
+    {
+      "n_per_regime": 2050,
+      "total_audit_n": 8200,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.999116,
+      "joint_pass_prob": {
+        "rho_0.0": 0.961813,
+        "rho_0.3": 0.96388,
+        "rho_0.6": 0.971595
+      }
+    },
+    {
+      "n_per_regime": 2075,
+      "total_audit_n": 8300,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.99917,
+      "joint_pass_prob": {
+        "rho_0.0": 0.964125,
+        "rho_0.3": 0.966395,
+        "rho_0.6": 0.972835
+      }
+    },
+    {
+      "n_per_regime": 2100,
+      "total_audit_n": 8400,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.999221,
+      "joint_pass_prob": {
+        "rho_0.0": 0.966297,
+        "rho_0.3": 0.968225,
+        "rho_0.6": 0.975285
+      }
+    },
+    {
+      "n_per_regime": 2125,
+      "total_audit_n": 8500,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.999383,
+      "joint_pass_prob": {
+        "rho_0.0": 0.973218,
+        "rho_0.3": 0.97473,
+        "rho_0.6": 0.9798
+      }
+    },
+    {
+      "n_per_regime": 2150,
+      "total_audit_n": 8600,
+      "n_cells": 44,
+      "marginal_pass_prob": 0.999421,
+      "joint_pass_prob": {
+        "rho_0.0": 0.97484,
+        "rho_0.3": 0.97657,
+        "rho_0.6": 0.981145
       }
     },
     {
@@ -436,8 +535,8 @@
       "marginal_pass_prob": 0.99988,
       "joint_pass_prob": {
         "rho_0.0": 0.994719,
-        "rho_0.3": 0.994965,
-        "rho_0.6": 0.995405
+        "rho_0.3": 0.994785,
+        "rho_0.6": 0.995485
       }
     },
     {
@@ -447,8 +546,8 @@
       "marginal_pass_prob": 0.999986,
       "joint_pass_prob": {
         "rho_0.0": 0.999364,
-        "rho_0.3": 0.99938,
-        "rho_0.6": 0.999495
+        "rho_0.3": 0.99932,
+        "rho_0.6": 0.999485
       }
     }
   ],
@@ -457,51 +556,60 @@
       "rho_0.0": {
         "n_per_regime": 1700,
         "total_audit_n": 6800,
-        "joint_pass_prob": 0.830159
+        "joint_pass_prob": 0.830159,
+        "note": "first tested N in grid, not mathematical minimum"
       },
       "rho_0.3": {
         "n_per_regime": 1600,
         "total_audit_n": 6400,
-        "joint_pass_prob": 0.811595
+        "joint_pass_prob": 0.811595,
+        "note": "first tested N in grid, not mathematical minimum"
       },
       "rho_0.6": {
         "n_per_regime": 1500,
         "total_audit_n": 6000,
-        "joint_pass_prob": 0.803485
+        "joint_pass_prob": 0.803485,
+        "note": "first tested N in grid, not mathematical minimum"
       }
     },
     "target_0.90": {
       "rho_0.0": {
         "n_per_regime": 1900,
         "total_audit_n": 7600,
-        "joint_pass_prob": 0.923203
+        "joint_pass_prob": 0.923203,
+        "note": "first tested N in grid, not mathematical minimum"
       },
       "rho_0.3": {
         "n_per_regime": 1900,
         "total_audit_n": 7600,
-        "joint_pass_prob": 0.928615
+        "joint_pass_prob": 0.928615,
+        "note": "first tested N in grid, not mathematical minimum"
       },
       "rho_0.6": {
         "n_per_regime": 1800,
         "total_audit_n": 7200,
-        "joint_pass_prob": 0.9209
+        "joint_pass_prob": 0.9209,
+        "note": "first tested N in grid, not mathematical minimum"
       }
     },
     "target_0.95": {
       "rho_0.0": {
-        "n_per_regime": 2500,
-        "total_audit_n": 10000,
-        "joint_pass_prob": 0.994719
+        "n_per_regime": 2025,
+        "total_audit_n": 8100,
+        "joint_pass_prob": 0.959353,
+        "note": "first tested N in grid, not mathematical minimum"
       },
       "rho_0.3": {
         "n_per_regime": 2000,
         "total_audit_n": 8000,
-        "joint_pass_prob": 0.95146
+        "joint_pass_prob": 0.95073,
+        "note": "first tested N in grid, not mathematical minimum"
       },
       "rho_0.6": {
-        "n_per_regime": 2000,
-        "total_audit_n": 8000,
-        "joint_pass_prob": 0.963015
+        "n_per_regime": 1925,
+        "total_audit_n": 7700,
+        "joint_pass_prob": 0.956145,
+        "note": "first tested N in grid, not mathematical minimum"
       }
     }
   },
@@ -510,5 +618,5 @@
     "rho_gt0_method": "Monte Carlo (200000 sims per config)",
     "seed": 42
   },
-  "elapsed_seconds": 313.7
+  "elapsed_seconds": 399.8
 }

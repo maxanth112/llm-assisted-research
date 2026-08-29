@@ -2,7 +2,7 @@
 """
 Monte Carlo power simulation for the ETD-ACH 5-condition experiment.
 
-Phase A.2 rewrite.
+Phase A.2 cleanup rewrite.
 
 Design (AMENDMENT-002 §4.1):
   5 conditions (E=0 cells with T=1/D=1 are incoherent and excluded):
@@ -13,18 +13,24 @@ Design (AMENDMENT-002 §4.1):
     111 (E=1,T=1,D=1) - Full scaffold
 
 Primary confirmatory estimand:
-  D effect CONDITIONAL on E=1, in adversarial regimes (DECOY+CONFLICT),
-  AVERAGED over T:
-    contrast = 0.5 * [(Y_101 - Y_100) + (Y_111 - Y_110)]
-  Equivalently: effect-coded D in a GLMM restricted to E=1 conditions.
+  Paired marginal contrast for the D effect, CONDITIONAL on E=1,
+  in adversarial regimes (DECOY+CONFLICT), AVERAGED over T:
+    contrast_i = 0.5 * [(Y_101_i - Y_100_i) + (Y_111_i - Y_110_i)]
+  where i indexes items. The estimand is E[contrast_i].
 
-Primary model:
-  logit(P(correct)) ~ T_eff * D_eff + (1|item)
-  where T_eff = T - 0.5, D_eff = D - 0.5 (effect coding).
-  The D_eff coefficient estimates the D effect averaged over T.
-  Tested via Wald z-test on the D_eff coefficient.
+Primary test:
+  One-sample paired t-test on the item-level contrast values.
+  The t-statistic is contrast_mean / (contrast_sd / sqrt(N)).
+  Tested two-sided at alpha = 0.05.
+
+  Confidence interval: paired percentile bootstrap (10,000 resamples)
+  on the mean contrast. Reported alongside the t-test p-value.
 
   Model is a FIXED effect → power is computed per-model.
+
+Robustness (secondary, not gated):
+  Effect-coded binomial GEE with item-clustered robust SE.
+  Reported for comparison but does not replace the paired t-test.
 
 Secondary (reported, not gated):
   - McNemar tests: 101 vs 100, 111 vs 110 (paired binary)
@@ -123,56 +129,28 @@ def simulate_experiment(
         y = rng.binomial(1, np.tile(p_ij[:, None], (1, k_runs)))  # (n_items, k_runs)
         outcomes[cond_name] = y
 
-    # ---------- PRIMARY: GLMM approximation via Wald test ----------
-    # For each item, compute mean accuracy per E=1 condition
-    # Then fit a linear model: y_mean ~ T_eff + D_eff + T_eff*D_eff
-    # with item as random effect.
-    # Approximation: use item-level means and weighted least squares.
-
+    # ---------- PRIMARY: Paired marginal contrast with t-test ----------
     # Per-item mean accuracy per E=1 condition
     y_100 = outcomes['100'].mean(axis=1)  # (n_items,)
     y_110 = outcomes['110'].mean(axis=1)
     y_101 = outcomes['101'].mean(axis=1)
     y_111 = outcomes['111'].mean(axis=1)
 
-    # Stack into design: 4 rows per item (one per E=1 condition)
     n = n_items
-    Y = np.concatenate([y_100, y_110, y_101, y_111])  # (4*n,)
 
-    # Effect-coded design matrix (T_eff, D_eff, T_eff*D_eff)
-    T_vals = np.array([-0.5, 0.5, -0.5, 0.5])  # 100,110,101,111
-    D_vals = np.array([-0.5, -0.5, 0.5, 0.5])
-    TD_vals = T_vals * D_vals
-
-    T_col = np.tile(T_vals, n)
-    D_col = np.tile(D_vals, n)
-    TD_col = np.tile(TD_vals, n)
-    intercept = np.ones(4 * n)
-
-    X = np.column_stack([intercept, T_col, D_col, TD_col])  # (4n, 4)
-
-    # Simple OLS for the marginal contrast (ignoring item RE for the test —
-    # item RE inflates SE which makes this conservative).
-    # For a proper mixed model we'd need iterative estimation, but for
-    # power simulation the marginal contrast test is equivalent:
-    # contrast = mean(Y_101 + Y_111) - mean(Y_100 + Y_110) = 2 * beta_D
-
-    # Direct contrast estimator (more interpretable):
-    D1_mean = np.concatenate([y_101, y_111])
-    D0_mean = np.concatenate([y_100, y_110])
-
-    # Paired contrast per item (average over T)
+    # Paired contrast per item (average over T):
+    # contrast_i = 0.5 * [(Y_101_i - Y_100_i) + (Y_111_i - Y_110_i)]
     contrast_per_item = 0.5 * ((y_101 - y_100) + (y_111 - y_110))
     contrast_mean = contrast_per_item.mean()
     contrast_se = contrast_per_item.std(ddof=1) / np.sqrt(n)
 
-    # Wald z-test for the primary contrast
+    # One-sample paired t-test on the contrast values
+    from scipy import stats
     if contrast_se > 0:
-        z_primary = contrast_mean / contrast_se
-        from scipy import stats
-        p_primary = 2 * stats.norm.sf(abs(z_primary))
+        t_primary = contrast_mean / contrast_se
+        p_primary = float(2 * stats.t.sf(abs(t_primary), df=n - 1))
     else:
-        z_primary = 0.0
+        t_primary = 0.0
         p_primary = 1.0
 
     # ---------- SECONDARY: McNemar tests (paired binary) ----------
@@ -225,7 +203,7 @@ def simulate_experiment(
         'primary': {
             'contrast': float(contrast_mean),
             'se': float(contrast_se),
-            'z': float(z_primary),
+            't': float(t_primary),
             'p_value': float(p_primary),
         },
         'mcnemar_101v100': {'p_value': float(p_mcnemar_101v100)},
@@ -249,7 +227,7 @@ def run_power_sweep(
 ) -> Dict[str, Any]:
     """Run power sweep for the 5-condition design.
 
-    Primary: D|E=1 averaged over T, via paired contrast with Wald test.
+    Primary: D|E=1 averaged over T, via paired marginal contrast with t-test.
     Secondary: McNemar 101v100, McNemar 111v110.
     """
     rng = np.random.RandomState(seed)
@@ -313,7 +291,7 @@ def run_power_sweep(
     return {
         'design': '5-condition (000,100,110,101,111)',
         'primary_estimand': 'D|E=1 averaged over T, adversarial regimes',
-        'primary_test': 'Wald z-test on paired marginal contrast',
+        'primary_test': 'One-sample paired t-test on marginal contrast',
         'secondary_tests': ['McNemar 101v100', 'McNemar 111v110',
                             'Enumeration 100v000', 'T|E=1'],
         'alpha': alpha,
@@ -378,7 +356,7 @@ def format_report(sweep: Dict, mde_table: List) -> str:
         f"- **Delta T (trajectory effect):** {sweep['delta_T']}",
         f"- **Delta TD (interaction):** {sweep['delta_TD']}",
         "",
-        "## Primary Power Table: D|E=1 (marginal contrast Wald test)",
+        "## Primary Power Table: D|E=1 (paired marginal contrast, t-test)",
         "",
     ]
 
@@ -422,8 +400,9 @@ def format_report(sweep: Dict, mde_table: List) -> str:
 
     lines.append("## Notes")
     lines.append("")
-    lines.append("- Primary estimand: D|E=1 averaged over T = 0.5*[(Y_101-Y_100)+(Y_111-Y_110)]")
-    lines.append("- Effect coding (T_eff=T-0.5, D_eff=D-0.5) ensures D coefficient is averaged over T")
+    lines.append("- Primary estimand: paired marginal contrast D|E=1 averaged over T = 0.5*[(Y_101-Y_100)+(Y_111-Y_110)]")
+    lines.append("- Primary test: one-sample paired t-test on item-level contrast values")
+    lines.append("- Robustness: effect-coded binomial GEE with item-clustered robust SE (secondary, not gated)")
     lines.append("- McNemar tests are secondary paired checks (genuinely binary, not averaged)")
     lines.append("- Model is a FIXED effect → power is per-model; no generalization claim")
     lines.append("- MDE depends on (N, k, σ, p₀) — no single fixed MDE is claimed")
@@ -453,34 +432,37 @@ def run_per_model_power(
     n_items_range: List[int],
     delta_D_range: List[float],
     sigma_item: float,
-    k_runs: int,
+    k_runs_range: List[int],
     alpha: float = 0.05,
     seed: int = 42,
 ) -> Dict[str, Any]:
-    """Run power sweep for each model profile.
+    """Run power sweep for each model profile, for each k_runs value.
 
-    Returns dict keyed by model name, each containing the sweep results.
+    Returns dict keyed by model name, each containing per-k_runs sweep results.
     """
     all_model_results = {}
     for model_name, profile in MODEL_PROFILES.items():
-        print(f"\n  Model: {model_name} (p0={profile['p0']})", file=sys.stderr)
-        sweep = run_power_sweep(
-            n_sims=n_sims,
-            n_items_range=n_items_range,
-            baseline_accs=[profile['p0']],
-            delta_D_range=delta_D_range,
-            sigma_items=[sigma_item],
-            k_runs_range=[k_runs],
-            delta_T=0.0,
-            delta_TD=0.0,
-            alpha=alpha,
-            seed=seed,
-        )
-        mde = find_mde(sweep['results'], target_powers=[0.80, 0.90])
+        per_k_results = {}
+        for k in k_runs_range:
+            print(f"\n  Model: {model_name} (p0={profile['p0']}, k_runs={k})",
+                  file=sys.stderr)
+            sweep = run_power_sweep(
+                n_sims=n_sims,
+                n_items_range=n_items_range,
+                baseline_accs=[profile['p0']],
+                delta_D_range=delta_D_range,
+                sigma_items=[sigma_item],
+                k_runs_range=[k],
+                delta_T=0.0,
+                delta_TD=0.0,
+                alpha=alpha,
+                seed=seed,
+            )
+            mde = find_mde(sweep['results'], target_powers=[0.80, 0.90])
+            per_k_results[k] = {'sweep': sweep, 'mde': mde}
         all_model_results[model_name] = {
             'profile': profile,
-            'sweep': sweep,
-            'mde': mde,
+            'per_k': per_k_results,
         }
     return all_model_results
 
@@ -492,44 +474,86 @@ def format_per_model_report(model_results: Dict) -> str:
         "## Per-Model Power (model is a fixed effect)",
         "",
         "Each model has its own baseline accuracy p0 on adversarial regimes.",
-        "Power is computed separately because the marginal contrast variance",
-        "depends on p0.  These are pre-specified operating points.",
+        "Power is computed separately because the paired marginal contrast variance",
+        "depends on p0. These are pre-specified operating points.",
         "",
     ]
     for model_name, mr in model_results.items():
         profile = mr['profile']
-        results = mr['sweep']['results']
-        lines.append(f"### {model_name} (p0={profile['p0']}, {profile['note']})")
-        lines.append("")
-        lines.append("| N_items | delta_D | Power (primary) | Power McN 101v100 | Power McN 111v110 |")
-        lines.append("|---------|---------|-----------------|-------------------|-------------------|")
-        for r in sorted(results, key=lambda x: (x['n_items'], x['delta_D'])):
-            lines.append(
-                f"| {r['n_items']} | {r['delta_D']:.3f} | "
-                f"{r['power_primary']:.3f} | "
-                f"{r['power_mcnemar_101v100']:.3f} | "
-                f"{r['power_mcnemar_111v110']:.3f} |"
-            )
-        lines.append("")
+        for k, kr in sorted(mr['per_k'].items()):
+            results = kr['sweep']['results']
+            lines.append(f"### {model_name} (p0={profile['p0']}, k_runs={k}, {profile['note']})")
+            lines.append("")
+            lines.append("| N_items | delta_D | Power (primary) | Power McN 101v100 | Power McN 111v110 |")
+            lines.append("|---------|---------|-----------------|-------------------|-------------------|")
+            for r in sorted(results, key=lambda x: (x['n_items'], x['delta_D'])):
+                lines.append(
+                    f"| {r['n_items']} | {r['delta_D']:.3f} | "
+                    f"{r['power_primary']:.3f} | "
+                    f"{r['power_mcnemar_101v100']:.3f} | "
+                    f"{r['power_mcnemar_111v110']:.3f} |"
+                )
+            lines.append("")
 
-        # MDE for this model
-        mde = mr['mde']
-        lines.append(f"**MDE for {model_name}:**")
-        lines.append("")
-        lines.append("| N_items | Target Power | MDE (pp) | Achieved |")
-        lines.append("|---------|-------------|----------|----------|")
-        for m in sorted(mde, key=lambda x: (x['n_items'], x['target_power'])):
-            if m['mde'] is not None:
-                lines.append(
-                    f"| {m['n_items']} | {m['target_power']} | "
-                    f"{m['mde']*100:.1f} | {m['achieved_power']:.3f} |"
-                )
-            else:
-                lines.append(
-                    f"| {m['n_items']} | {m['target_power']} | "
-                    f">10.0 | N/A |"
-                )
-        lines.append("")
+            # MDE for this model/k
+            mde = kr['mde']
+            lines.append(f"**MDE for {model_name} (k_runs={k}):**")
+            lines.append("")
+            lines.append("| N_items | Target Power | MDE (pp) | Achieved |")
+            lines.append("|---------|-------------|----------|----------|")
+            for m in sorted(mde, key=lambda x: (x['n_items'], x['target_power'])):
+                if m['mde'] is not None:
+                    lines.append(
+                        f"| {m['n_items']} | {m['target_power']} | "
+                        f"{m['mde']*100:.1f} | {m['achieved_power']:.3f} |"
+                    )
+                else:
+                    lines.append(
+                        f"| {m['n_items']} | {m['target_power']} | "
+                        f">10.0 | N/A |"
+                    )
+            lines.append("")
+    return "\n".join(lines)
+
+
+def compute_cost_model(n_items_range: List[int], k_runs_range: List[int]) -> str:
+    """Compute and format approximate model-call and token-cost implications.
+
+    Assumptions (clearly labeled as estimates):
+    - 5 conditions per item
+    - 3 models
+    - ~2,000 tokens per API call (prompt + completion estimate)
+    - Cost varies by model; estimates use representative rates
+    """
+    lines = [
+        "",
+        "## Approximate Cost Model (ESTIMATE)",
+        "",
+        "**Assumptions (labeled as estimates, not commitments):**",
+        "- 5 conditions per item",
+        "- 3 models (Llama-3.3-70B, Qwen2.5-72B, proprietary)",
+        "- ~2,000 tokens per API call (prompt + completion, rough estimate)",
+        "- Open-weight models: ~$0.00 marginal cost (self-hosted)",
+        "- Proprietary model: ~$0.01 per 1K tokens (estimate)",
+        "",
+        "| N_items | k_runs | Total calls/model | Total calls (3 models) | Proprietary tokens (est.) | Proprietary cost (est.) |",
+        "|---------|--------|-------------------|----------------------|--------------------------|------------------------|",
+    ]
+    for n in n_items_range:
+        for k in k_runs_range:
+            calls_per_model = n * 5 * k  # n_items * 5_conditions * k_runs
+            total_calls = calls_per_model * 3
+            prop_tokens = calls_per_model * 2000
+            prop_cost = prop_tokens * 0.01 / 1000
+            lines.append(
+                f"| {n} | {k} | {calls_per_model:,} | {total_calls:,} | "
+                f"{prop_tokens:,} | ${prop_cost:,.2f} |"
+            )
+    lines.append("")
+    lines.append("**Note:** Open-weight model costs depend on infrastructure.")
+    lines.append("Proprietary cost uses $0.01/1K tokens as a rough estimate.")
+    lines.append("Actual costs may vary significantly. This table is for planning only.")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -543,25 +567,29 @@ def main():
 
     t0 = time.time()
 
+    # Effect sizes include delta_D=0 to verify nominal Type-I error
+    # N range extends to 1000+ to find 80/90% power for 5pp and 7pp effects
     if args.quick:
         n_sims = 500
-        n_items_range = [50, 100, 200]
+        n_items_range = [200, 300, 500, 750, 1000]
         baseline_accs = [0.40, 0.50]
-        delta_D_range = [0.03, 0.05, 0.07, 0.10]
+        delta_D_range = [0.0, 0.02, 0.03, 0.05, 0.07, 0.10]
         sigma_items = [0.5]
         k_runs_range = [1, 3]
         per_model_sigma = 0.5
-        per_model_k = 1
+        per_model_k_range = [1, 3]
+        per_model_n_sims = 500
         print("Quick mode", file=sys.stderr)
     else:
-        n_sims = 1000
-        n_items_range = [50, 100, 150, 200, 300]
+        n_sims = 2000
+        n_items_range = [200, 300, 500, 750, 1000, 1500]
         baseline_accs = [0.35, 0.40, 0.45, 0.50, 0.55]
-        delta_D_range = [0.02, 0.03, 0.05, 0.07, 0.10, 0.15]
+        delta_D_range = [0.0, 0.02, 0.03, 0.05, 0.07, 0.10]
         sigma_items = [0.3, 0.5, 0.8]
         k_runs_range = [1, 3]
         per_model_sigma = 0.5
-        per_model_k = 1
+        per_model_k_range = [1, 3]
+        per_model_n_sims = 2000
         print("Full mode", file=sys.stderr)
 
     # --- Generic sweep ---
@@ -581,14 +609,14 @@ def main():
 
     mde_table = find_mde(sweep['results'], target_powers=[0.80, 0.90])
 
-    # --- Per-model sweep ---
+    # --- Per-model sweep (BOTH k_runs=1 and k_runs=3) ---
     print("\nRunning per-model power sweep...", file=sys.stderr)
     model_results = run_per_model_power(
-        n_sims=n_sims,
+        n_sims=per_model_n_sims,
         n_items_range=n_items_range,
         delta_D_range=delta_D_range,
         sigma_item=per_model_sigma,
-        k_runs=per_model_k,
+        k_runs_range=per_model_k_range,
         alpha=0.05,
         seed=42,
     )
@@ -602,8 +630,13 @@ def main():
         'per_model': {
             name: {
                 'profile': mr['profile'],
-                'results': mr['sweep']['results'],
-                'mde': mr['mde'],
+                'per_k': {
+                    str(k): {
+                        'results': kr['sweep']['results'],
+                        'mde': kr['mde'],
+                    }
+                    for k, kr in mr['per_k'].items()
+                },
             }
             for name, mr in model_results.items()
         },
@@ -615,6 +648,7 @@ def main():
 
     report = format_report(sweep, mde_table)
     report += format_per_model_report(model_results)
+    report += compute_cost_model(n_items_range, per_model_k_range)
     report_path = args.output.replace('.json', '_report.md')
     with open(report_path, 'w') as f:
         f.write(report)

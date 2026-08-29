@@ -86,6 +86,19 @@ hypothesis and the evidence text. Predict the hypothesis with most overlap.
 - **Correct:** True
 
 ---
+## Training Items for Baselines 6-11
+
+Baselines 6-11 require a train/test split. The following 6 training
+items are used (the test item is the example item above):
+
+- **train_001** (regime=CLEAN, gold=index 0: "David Park is responsible")
+- **train_002** (regime=CLEAN, gold=index 1: "Henry Liu is responsible")
+- **train_003** (regime=DECOY, gold=index 2: "Leo Brown is responsible")
+- **train_004** (regime=DECOY, gold=index 0: "Maria Santos is responsible")
+- **train_005** (regime=CONFLICT, gold=index 1: "Quinn Taylor is responsible")
+- **train_006** (regime=CONFLICT, gold=index 2: "Victor Hall is responsible")
+
+---
 ## 6. TF-IDF Word (`pred_tfidf_word`)
 
 **Logic:** Expand each item into K candidate rows, each with TARGET-normalized
@@ -106,10 +119,12 @@ TARGET/OTHER_k placeholders differ. This is what Phase A.2 fixed —
 in A.1, all rows had identical context (candidate name differences
 cancelled in TF-IDF).
 
-**Training:** Requires a train/test split (template-held-out CV).
-The classifier learns whether TARGET-implicated context predicts
-goldness. In a non-leaking corpus, TARGET mentions are balanced
-across gold/non-gold rows → accuracy ≈ chance.
+**Trained prediction:** index 0 → "Alice Chen is responsible"
+**Gold:** index 0 → "Alice Chen is responsible"
+**Correct:** True
+
+**Why at chance if no leak:** In a non-leaking corpus, TARGET mentions are
+balanced across gold/non-gold rows → classifier learns nothing → ~1/K.
 
 ---
 ## 7. TF-IDF Char (`pred_tfidf_char`)
@@ -118,6 +133,10 @@ across gold/non-gold rows → accuracy ≈ chance.
 This catches subword patterns that word-level TF-IDF misses.
 
 **Same TARGET normalization as baseline 6** (only the vectorizer differs).
+
+**Trained prediction:** index 0 → "Alice Chen is responsible"
+**Gold:** index 0 → "Alice Chen is responsible"
+**Correct:** True
 
 ---
 ## 8. Length Feature (`pred_length`)
@@ -137,6 +156,10 @@ vs other candidates. Train logistic regression on [target, delta] features.
 
 **Training uses columns [4, 5]** = target_length_sum, delta_length_sum.
 
+**Trained prediction:** index 0 → "Alice Chen is responsible"
+**Gold:** index 0 → "Alice Chen is responsible"
+**Correct:** True
+
 ---
 ## 9. Mention + Evidence (`pred_mention_evidence`)
 
@@ -149,6 +172,10 @@ Columns [0,1,2,3] = target_mention, delta_mention, target_evidence, delta_eviden
     mention_count=2, evidence_count=1
   - Candidate 2 (Carol Davis → TARGET):
     mention_count=2, evidence_count=1
+
+**Trained prediction:** index 0 → "Alice Chen is responsible"
+**Gold:** index 0 → "Alice Chen is responsible"
+**Correct:** True
 
 ---
 ## 10. First Mention Order (`pred_first_mention_order`)
@@ -166,6 +193,10 @@ Earlier mention → smaller value → potentially more salient.
 
 **Training uses columns [6, 7]** = target_first_mention_pos, delta_first_mention_pos.
 
+**Trained prediction:** index 2 → "Carol Davis is responsible"
+**Gold:** index 0 → "Alice Chen is responsible"
+**Correct:** False
+
 ---
 ## 11. Combined Shallow (`pred_combined`)
 
@@ -178,6 +209,10 @@ evidence count, length, and first-mention position together.
   - Candidate 0: [mention_count_t=3.000, mention_count_d=1.000, evidence_count_t=2.000, evidence_count_d=1.000, length_sum_t=194.000, length_sum_d=118.500, first_mention_pos_t=0.174, first_mention_pos_d=-0.030]
   - Candidate 1: [mention_count_t=2.000, mention_count_d=-0.500, evidence_count_t=1.000, evidence_count_d=-0.500, length_sum_t=75.000, length_sum_d=-60.000, first_mention_pos_t=0.191, first_mention_pos_d=-0.004]
   - Candidate 2: [mention_count_t=2.000, mention_count_d=-0.500, evidence_count_t=1.000, evidence_count_d=-0.500, length_sum_t=76.000, length_sum_d=-58.500, first_mention_pos_t=0.217, first_mention_pos_d=0.034]
+
+**Trained prediction:** index 0 → "Alice Chen is responsible"
+**Gold:** index 0 → "Alice Chen is responsible"
+**Correct:** True
 
 **Why at chance if no leak:** When evidence is balanced across candidates
 (each mentioned equally regardless of who is guilty), all features are
