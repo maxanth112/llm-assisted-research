@@ -1,10 +1,16 @@
 """
 Regression tests for T2 v2 counterbalancing invariants.
 
-These tests verify that the repaired T2 generator enforces surface-level
-balance across suspects, preventing shallow classifiers from recovering
-the correct answer via mention frequency, evidence count, length,
-polarity, or positional cues.
+These tests verify that the v2 generator enforces surface-level balance
+across suspects, preventing shallow classifiers from recovering the
+correct answer via mention frequency, evidence count, length, or
+polarity cues.
+
+The positional-balance test (TestV2LegacyPositionBalance) checks the
+WEAKER guarantee the v2 generator actually provides — no gross positional
+bias (no position > 50%).  The stronger exact-balance invariant
+(max position-count difference <= 1) is a v3 requirement (AMENDMENT-002
+§2.5.2 S6) and is tested in the v3 test suite, not here.
 
 Pre-specified in AMENDMENT-001 §4.4.
 """
@@ -176,12 +182,30 @@ class TestPolarityBalance:
                 )
 
 
-class TestCorrectAnswerPositionUniformity:
-    """Verify the position of the correct answer is approximately uniform."""
+class TestV2LegacyPositionBalance:
+    """LEGACY (v2): Verify the v2 generator avoids gross positional bias.
 
-    def test_position_distribution(self):
-        """Over a large batch, the correct answer should not cluster at
-        any particular position in the hypothesis list."""
+    This test checks the WEAKER positional guarantee that the v2 generator
+    actually provides: no single hypothesis position holds more than 50% of
+    gold answers.  This is NOT the exact-balance invariant (max position-count
+    difference <= 1) required by the v3 generator (AMENDMENT-002 §2.5.2 S6).
+
+    The v2 generator does not enforce exact positional balance by construction.
+    It uses a simple shuffle that, over a large enough batch, avoids gross
+    clustering but does NOT guarantee max-diff <= 1.
+
+    This test is NON-GATING for the v3 audit — it documents the historical v2
+    guarantee only.  The v3 gating test is in test_t2_v3_counterbalancing.py
+    (to be added in Phase B).
+    """
+
+    def test_v2_legacy_no_gross_positional_bias(self):
+        """LEGACY (v2): No single position holds > 50% of gold answers.
+
+        This is the v2 generator's weaker historical positional guarantee.
+        It does NOT verify max position-count difference <= 1 (that is the
+        v3 invariant, tested separately).
+        """
         g = T2Generator(seed=42)
         items = g.generate_dataset(n_per_regime=16, seed=42)
 
@@ -203,11 +227,8 @@ class TestCorrectAnswerPositionUniformity:
         if len(counter) < 2:
             pytest.skip("Only one position observed")
 
-        # Deterministic criterion: no single position holds > 50% of
-        # gold answers. This replaces the flaky chi-squared test with a
-        # stable, non-probabilistic check. The v3 generator will enforce
-        # exact balance (max diff ≤ 1 per S2/S6), but the v2 generator
-        # only needs to avoid gross positional bias.
+        # v2 guarantee: no gross positional bias (no single position > 50%).
+        # This is strictly weaker than the v3 requirement of max diff <= 1.
         n_total = len(positions)
         max_frac = max(counter.values()) / n_total
 

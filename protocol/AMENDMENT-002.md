@@ -229,12 +229,25 @@ is likely from evidence content (acceptable) rather than template structure
 
 ### 2.6 Preserved v2 Counterbalancing Invariants
 
-All v2 counterbalancing invariants are preserved:
+All v2 counterbalancing invariants are preserved in v3:
 - Name-frequency equalization (CV <= 0.10)
 - Evidence-count parity per suspect
 - Clue-polarity balance (within ±1)
 - Counterfactual minimal pairs (Jaccard >= 0.85)
-- Positional uniformity (per-regime position counts differ by at most 1)
+
+**Positional balance — v2 vs v3 distinction:**
+
+The v2 generator provides a WEAKER positional guarantee than v3:
+- **v2 (historical):** No single gold-answer position holds more than 50% of
+  items. This is tested by `TestV2LegacyPositionBalance` in the v2 test suite.
+  The v2 generator uses a simple shuffle that avoids gross clustering but does
+  NOT enforce exact balance by construction.
+- **v3 (new, §2.5.2 S6):** Per-regime gold-answer position counts differ by
+  AT MOST 1 (exact balance by construction). This is a strictly stronger
+  requirement enforced by the v3 generator and verified by its own test suite.
+
+The v2 positional test is retained as a LEGACY, NON-GATING regression test.
+It is NOT represented as satisfying the v3 max-diff-≤-1 invariant.
 
 ---
 

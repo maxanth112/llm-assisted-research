@@ -5,33 +5,71 @@ Generate hand-auditable worked examples for all 11 leakage baselines.
 Produces analysis/leakage_worked_examples.md showing step-by-step
 computation for each baseline on a single concrete item.
 
-Phase A.2 Work Item 5 (cleanup: now includes actual trained predictions
-for baselines 6-11, not just input features).
+Phase A.2 corrective rewrite: includes ACTUAL fitted candidate
+probabilities/scores for baselines 6-11, with intermediate values
+(normalized candidate rows, feature vectors, classifier coefficients,
+per-candidate scores) sufficient to reproduce the selected candidate
+by hand.
 """
-import sys, os, json
+import sys, os, json, gc
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import numpy as np
+from sklearn.linear_model import LogisticRegression
 from analysis.run_leakage_eval import (
     extract_name, ev_content_text, ev_content_list, gold_index,
     _extract_all_names, _target_normalize_text, _target_normalized_candidate_text,
     _compute_candidate_features, wilson_ci,
+    _prepare_candidate_rows, _build_structured_candidate_rows,
     pred_majority, pred_position, pred_mention_count,
     pred_evidence_count, pred_lexical_overlap,
-    pred_tfidf_word, pred_tfidf_char, pred_length,
-    pred_mention_evidence, pred_first_mention_order, pred_combined,
 )
 
 
-def make_training_items():
-    """Create a small set of training items for trained baseline examples.
+def _candidate_predict_with_probs(train_items, test_items, build_features_fn):
+    """Same as _candidate_predict but returns (predictions, per_item_probs, clf).
 
-    These are used as the training split for baselines 6-11 which require
-    fitting a classifier. The training set is deliberately small and balanced
-    to make the worked example tractable to audit by hand.
+    per_item_probs: list of arrays, one per test item, each array has
+    P(gold=1) for each candidate in that item's hypotheses.
     """
+    tr_X, tr_labels, tr_item_ids, tr_valid = build_features_fn(train_items, is_train=True)
+    te_X, te_labels, te_item_ids, te_valid = build_features_fn(test_items, is_train=False)
+
+    tr_row_valid = np.array([tr_valid[iid] for iid in tr_item_ids])
+    tr_X_v = tr_X[tr_row_valid]
+    tr_y_v = tr_labels[tr_row_valid]
+
+    if len(set(tr_y_v.tolist())) < 2:
+        return (np.zeros(len(test_items), dtype=int),
+                [np.zeros(len(it["hypotheses"])) for it in test_items],
+                None)
+
+    clf = LogisticRegression(max_iter=500, solver='lbfgs', random_state=42)
+    clf.fit(tr_X_v, tr_y_v)
+
+    col_1 = clf.classes_.tolist().index(1) if 1 in clf.classes_ else -1
+    if col_1 >= 0:
+        probs = clf.predict_proba(te_X)[:, col_1]
+    else:
+        probs = np.zeros(te_X.shape[0])
+
+    full_preds = np.full(len(test_items), -1, dtype=int)
+    per_item_probs = []
+    for item_idx in range(len(test_items)):
+        row_mask = te_item_ids == item_idx
+        if not row_mask.any():
+            per_item_probs.append(np.array([]))
+            continue
+        item_probs = probs[row_mask]
+        per_item_probs.append(item_probs)
+        full_preds[item_idx] = int(np.argmax(item_probs))
+
+    return full_preds, per_item_probs, clf
+
+
+def make_training_items():
+    """Create a small set of training items for trained baseline examples."""
     items = []
-    # Training item 1: Gold = suspect 0
     items.append({
         "id": "train_001",
         "regime": "CLEAN",
@@ -54,7 +92,6 @@ def make_training_items():
         "gold_reasoning": "Direct physical evidence links David Park.",
         "metadata": {"template": "train_template_A"},
     })
-    # Training item 2: Gold = suspect 1
     items.append({
         "id": "train_002",
         "regime": "CLEAN",
@@ -77,7 +114,6 @@ def make_training_items():
         "gold_reasoning": "Access logs and motive point to Henry Liu.",
         "metadata": {"template": "train_template_B"},
     })
-    # Training item 3: Gold = suspect 2
     items.append({
         "id": "train_003",
         "regime": "DECOY",
@@ -100,7 +136,6 @@ def make_training_items():
         "gold_reasoning": "Physical presence and financial motive point to Leo Brown.",
         "metadata": {"template": "train_template_C"},
     })
-    # Training item 4: Gold = suspect 0
     items.append({
         "id": "train_004",
         "regime": "DECOY",
@@ -123,7 +158,6 @@ def make_training_items():
         "gold_reasoning": "Unauthorized modifications and presence at scene.",
         "metadata": {"template": "train_template_D"},
     })
-    # Training item 5: Gold = suspect 1
     items.append({
         "id": "train_005",
         "regime": "CONFLICT",
@@ -146,7 +180,6 @@ def make_training_items():
         "gold_reasoning": "Matching deposit and system access.",
         "metadata": {"template": "train_template_E"},
     })
-    # Training item 6: Gold = suspect 2
     items.append({
         "id": "train_006",
         "regime": "CONFLICT",
@@ -202,6 +235,192 @@ def make_example_item():
     }
 
 
+def _format_tfidf_baseline(item, names, gi, train_items, test_items,
+                            baseline_num, baseline_name, func_name,
+                            analyzer, ngram_range, max_features):
+    """Format a TF-IDF baseline with full probability details."""
+    from sklearn.feature_extraction.text import TfidfVectorizer
+
+    lines = []
+    lines.append("---")
+    lines.append(f"## {baseline_num}. {baseline_name} (`{func_name}`)")
+    lines.append("")
+
+    if baseline_num == 6:
+        lines.append("**Logic:** Expand each item into K candidate rows, each with TARGET-normalized")
+        lines.append("text. Train a logistic regression on TF-IDF (word unigram+bigram, max 200 features).")
+        lines.append("Predict the candidate with highest P(gold=1).")
+    else:
+        lines.append("**Logic:** Same as baseline 6 but with character n-grams (2-4, char_wb).")
+        lines.append("This catches subword patterns that word-level TF-IDF misses.")
+    lines.append("")
+
+    if baseline_num == 6:
+        lines.append("**TARGET normalization for this item:**")
+        lines.append("")
+        for j in range(len(item["hypotheses"])):
+            normalized = _target_normalized_candidate_text(item, j)
+            lines.append(f"  - Candidate {j} (\"{names[j]}\" -> TARGET):")
+            lines.append(f"    \"{normalized[:150]}...\"")
+        lines.append("")
+        lines.append("**Key insight:** Each candidate row has DIFFERENT text because the")
+        lines.append("TARGET/OTHER_k placeholders differ.")
+        lines.append("")
+
+    # Build features and train manually to capture probabilities
+    vec = TfidfVectorizer(
+        max_features=max_features,
+        analyzer=analyzer,
+        ngram_range=ngram_range,
+        stop_words='english' if analyzer == 'word' else None,
+        dtype=np.float32,
+    )
+
+    # Build candidate rows
+    def build_fn(items, is_train=False):
+        texts, labels, item_ids, valid_mask = _prepare_candidate_rows(items)
+        if is_train:
+            X = vec.fit_transform(texts)
+        else:
+            X = vec.transform(texts)
+        return X, labels, item_ids, valid_mask
+
+    preds, per_item_probs, clf = _candidate_predict_with_probs(
+        train_items, test_items, build_fn)
+
+    # Report fitted probabilities
+    lines.append("**Fitted candidate probabilities P(gold=1):**")
+    lines.append("")
+    if per_item_probs and len(per_item_probs[0]) > 0:
+        for j in range(len(item["hypotheses"])):
+            prob = per_item_probs[0][j]
+            marker = " <-- argmax" if j == preds[0] else ""
+            lines.append(f"  - Candidate {j} ({names[j]}): P(gold=1) = {prob:.4f}{marker}")
+    lines.append("")
+
+    lines.append(f"**Prediction:** index {preds[0]} -> \"{item['hypotheses'][preds[0]]}\"")
+    lines.append(f"**Gold:** index {gi} -> \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {preds[0] == gi}")
+    lines.append("")
+
+    if baseline_num == 6:
+        lines.append("**Why at chance if no leak:** In a non-leaking corpus, TARGET mentions are")
+        lines.append("balanced across gold/non-gold rows -> classifier learns nothing -> ~1/K.")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _format_structured_baseline(item, names, gi, train_items, test_items,
+                                 baseline_num, baseline_name, func_name,
+                                 col_selector, feature_description):
+    """Format a structured-feature baseline with full probability details."""
+    lines = []
+    lines.append("---")
+    lines.append(f"## {baseline_num}. {baseline_name} (`{func_name}`)")
+    lines.append("")
+    lines.append(f"**Logic:** {feature_description}")
+    lines.append("")
+
+    feat_names_all = ['mention_count', 'evidence_count', 'length_sum', 'first_mention_pos']
+
+    # Show features for test item
+    lines.append("**Structured features for this item (TARGET-normalized):**")
+    lines.append("")
+
+    all_feats = []
+    for j in range(len(item["hypotheses"])):
+        feats = _compute_candidate_features(item, j)
+        all_feats.append(feats)
+
+    for j in range(len(item["hypotheses"])):
+        feats = all_feats[j]
+        others = [all_feats[k] for k in range(len(item["hypotheses"])) if k != j]
+        if baseline_num == 11:
+            # Show full feature vector
+            row = []
+            for fn in feat_names_all:
+                t_val = feats[fn]
+                o_mean = np.mean([o[fn] for o in others])
+                row.append(f"{fn}_t={t_val:.3f}")
+                row.append(f"{fn}_d={t_val - o_mean:.3f}")
+            lines.append(f"  - Candidate {j} ({names[j]} -> TARGET): [{', '.join(row)}]")
+        elif baseline_num == 8:
+            lines.append(f"  - Candidate {j} ({names[j]} -> TARGET):")
+            o_mean_len = np.mean([o['length_sum'] for o in others])
+            lines.append(f"    length_sum = {feats['length_sum']}, delta = {feats['length_sum'] - o_mean_len:.1f}")
+        elif baseline_num == 9:
+            lines.append(f"  - Candidate {j} ({names[j]} -> TARGET):")
+            o_mean_mc = np.mean([o['mention_count'] for o in others])
+            o_mean_ec = np.mean([o['evidence_count'] for o in others])
+            lines.append(f"    mention_count={feats['mention_count']} (delta={feats['mention_count'] - o_mean_mc:.1f}), "
+                         f"evidence_count={feats['evidence_count']} (delta={feats['evidence_count'] - o_mean_ec:.1f})")
+        elif baseline_num == 10:
+            lines.append(f"  - Candidate {j} ({names[j]} -> TARGET):")
+            o_mean_fm = np.mean([o['first_mention_pos'] for o in others])
+            lines.append(f"    first_mention_pos = {feats['first_mention_pos']:.4f} "
+                         f"(delta = {feats['first_mention_pos'] - o_mean_fm:.4f})")
+    lines.append("")
+
+    if col_selector is not None:
+        lines.append(f"**Training uses feature columns {col_selector}.**")
+        lines.append("")
+
+    # Train and get probabilities
+    def build_fn(items, is_train=False):
+        X, labels, item_ids, valid_mask = _build_structured_candidate_rows(items)
+        if col_selector is not None:
+            cols = [c for c in col_selector if c < X.shape[1]]
+            X = X[:, cols]
+        return X, labels, item_ids, valid_mask
+
+    preds, per_item_probs, clf = _candidate_predict_with_probs(
+        train_items, test_items, build_fn)
+
+    # Report classifier details
+    if clf is not None:
+        lines.append("**Classifier coefficients:**")
+        lines.append(f"  - Intercept: {clf.intercept_[0]:.4f}")
+        coefs = clf.coef_[0]
+        if col_selector is not None:
+            used_names = []
+            raw_feat_names = ['mention_count_t', 'mention_count_d',
+                              'evidence_count_t', 'evidence_count_d',
+                              'length_sum_t', 'length_sum_d',
+                              'first_mention_pos_t', 'first_mention_pos_d']
+            for c in col_selector:
+                if c < len(raw_feat_names):
+                    used_names.append(raw_feat_names[c])
+                else:
+                    used_names.append(f"col_{c}")
+        else:
+            used_names = ['mention_count_t', 'mention_count_d',
+                          'evidence_count_t', 'evidence_count_d',
+                          'length_sum_t', 'length_sum_d',
+                          'first_mention_pos_t', 'first_mention_pos_d']
+        for i, c in enumerate(coefs):
+            name = used_names[i] if i < len(used_names) else f"col_{i}"
+            lines.append(f"  - {name}: {c:.4f}")
+        lines.append("")
+
+    # Report fitted probabilities
+    lines.append("**Fitted candidate probabilities P(gold=1):**")
+    lines.append("")
+    if per_item_probs and len(per_item_probs[0]) > 0:
+        for j in range(len(item["hypotheses"])):
+            prob = per_item_probs[0][j]
+            marker = " <-- argmax" if j == preds[0] else ""
+            lines.append(f"  - Candidate {j} ({names[j]}): P(gold=1) = {prob:.4f}{marker}")
+    lines.append("")
+
+    lines.append(f"**Prediction:** index {preds[0]} -> \"{item['hypotheses'][preds[0]]}\"")
+    lines.append(f"**Gold:** index {gi} -> \"{item['gold_answer']}\"")
+    lines.append(f"**Correct:** {preds[0] == gi}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 def generate_examples():
     item = make_example_item()
     names = _extract_all_names(item)
@@ -210,8 +429,10 @@ def generate_examples():
     lines = []
     lines.append("# Leakage Baseline Worked Examples")
     lines.append("")
-    lines.append("Phase A.2 Work Item 5: One hand-auditable worked example per baseline,")
-    lines.append("computed on a single concrete item using the actual predictor implementations.")
+    lines.append("Phase A.2 Work Item 5 (corrective rewrite): One hand-auditable worked")
+    lines.append("example per baseline, computed on a single concrete item using the actual")
+    lines.append("predictor implementations. Includes fitted candidate probabilities for")
+    lines.append("all trained baselines (6-11).")
     lines.append("")
     lines.append("## Example Item")
     lines.append("")
@@ -235,7 +456,7 @@ def generate_examples():
     lines.append("")
     pred = pred_majority([item], majority_label=0)
     lines.append(f"- Majority label (from training): 0")
-    lines.append(f"- **Prediction:** index {pred[0]} → \"{item['hypotheses'][pred[0]]}\"")
+    lines.append(f"- **Prediction:** index {pred[0]} -> \"{item['hypotheses'][pred[0]]}\"")
     lines.append(f"- **Correct:** {pred[0] == gi}")
     lines.append("")
     lines.append("**Why at chance:** In a balanced corpus with K candidates, each candidate")
@@ -249,7 +470,7 @@ def generate_examples():
     lines.append("**Logic:** Always predict index 0 (first hypothesis).")
     lines.append("")
     pred = pred_position([item])
-    lines.append(f"- **Prediction:** index {pred[0]} → \"{item['hypotheses'][pred[0]]}\"")
+    lines.append(f"- **Prediction:** index {pred[0]} -> \"{item['hypotheses'][pred[0]]}\"")
     lines.append(f"- **Correct:** {pred[0] == gi}")
     lines.append("")
     lines.append("**Why at chance:** If gold positions are uniformly distributed (enforced")
@@ -271,8 +492,8 @@ def generate_examples():
         n = extract_name(h).lower()
         count = text.count(n)
         lines.append(f"  - \"{n}\": count = {count}")
-    lines.append(f"- Argmax → index {pred[0]}")
-    lines.append(f"- **Prediction:** index {pred[0]} → \"{item['hypotheses'][pred[0]]}\"")
+    lines.append(f"- Argmax -> index {pred[0]}")
+    lines.append(f"- **Prediction:** index {pred[0]} -> \"{item['hypotheses'][pred[0]]}\"")
     lines.append(f"- **Correct:** {pred[0] == gi}")
     lines.append("")
     lines.append("**Why at chance if no leak:** If evidence mentions each suspect equally")
@@ -292,8 +513,8 @@ def generate_examples():
         n = extract_name(h).lower()
         ec = sum(1 for et in ev_contents if n in et.lower())
         lines.append(f"  - \"{n}\": appears in {ec}/{len(ev_contents)} evidence items")
-    lines.append(f"- Argmax → index {pred[0]}")
-    lines.append(f"- **Prediction:** index {pred[0]} → \"{item['hypotheses'][pred[0]]}\"")
+    lines.append(f"- Argmax -> index {pred[0]}")
+    lines.append(f"- **Prediction:** index {pred[0]} -> \"{item['hypotheses'][pred[0]]}\"")
     lines.append(f"- **Correct:** {pred[0] == gi}")
     lines.append("")
 
@@ -311,8 +532,8 @@ def generate_examples():
         overlap = len(ew & hw)
         shared = sorted(ew & hw)[:8]
         lines.append(f"  - \"{h}\": overlap = {overlap} words ({shared}{'...' if len(ew & hw) > 8 else ''})")
-    lines.append(f"- Argmax → index {pred[0]}")
-    lines.append(f"- **Prediction:** index {pred[0]} → \"{item['hypotheses'][pred[0]]}\"")
+    lines.append(f"- Argmax -> index {pred[0]}")
+    lines.append(f"- **Prediction:** index {pred[0]} -> \"{item['hypotheses'][pred[0]]}\"")
     lines.append(f"- **Correct:** {pred[0] == gi}")
     lines.append("")
 
@@ -332,150 +553,63 @@ def generate_examples():
                       f"\"{ti['gold_answer']}\")")
     lines.append("")
 
-    # ---- Baselines 6-7: TF-IDF (TARGET-normalized) ----
-    lines.append("---")
-    lines.append("## 6. TF-IDF Word (`pred_tfidf_word`)")
-    lines.append("")
-    lines.append("**Logic:** Expand each item into K candidate rows, each with TARGET-normalized")
-    lines.append("text. Train a logistic regression on TF-IDF (word unigram+bigram, max 200 features).")
-    lines.append("Predict the candidate with highest P(gold=1).")
-    lines.append("")
-    lines.append("**TARGET normalization for this item:**")
-    lines.append("")
-    for j in range(len(item["hypotheses"])):
-        normalized = _target_normalized_candidate_text(item, j)
-        lines.append(f"  - Candidate {j} (\"{names[j]}\" → TARGET):")
-        lines.append(f"    \"{normalized[:150]}...\"")
-    lines.append("")
-    lines.append("**Key insight:** Each candidate row has DIFFERENT text because the")
-    lines.append("TARGET/OTHER_k placeholders differ. This is what Phase A.2 fixed —")
-    lines.append("in A.1, all rows had identical context (candidate name differences")
-    lines.append("cancelled in TF-IDF).")
-    lines.append("")
+    # ---- Baseline 6: TF-IDF Word ----
+    lines.append(_format_tfidf_baseline(
+        item, names, gi, train_items, test_items,
+        baseline_num=6, baseline_name="TF-IDF Word", func_name="pred_tfidf_word",
+        analyzer='word', ngram_range=(1, 2), max_features=200,
+    ))
 
-    # Actual trained prediction
-    pred_word = pred_tfidf_word(train_items, test_items)
-    lines.append(f"**Trained prediction:** index {pred_word[0]} → \"{item['hypotheses'][pred_word[0]]}\"")
-    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
-    lines.append(f"**Correct:** {pred_word[0] == gi}")
-    lines.append("")
-    lines.append("**Why at chance if no leak:** In a non-leaking corpus, TARGET mentions are")
-    lines.append("balanced across gold/non-gold rows → classifier learns nothing → ~1/K.")
-    lines.append("")
+    # ---- Baseline 7: TF-IDF Char ----
+    lines.append(_format_tfidf_baseline(
+        item, names, gi, train_items, test_items,
+        baseline_num=7, baseline_name="TF-IDF Char", func_name="pred_tfidf_char",
+        analyzer='char_wb', ngram_range=(2, 4), max_features=200,
+    ))
 
-    lines.append("---")
-    lines.append("## 7. TF-IDF Char (`pred_tfidf_char`)")
-    lines.append("")
-    lines.append("**Logic:** Same as baseline 6 but with character n-grams (2-4, char_wb).")
-    lines.append("This catches subword patterns that word-level TF-IDF misses.")
-    lines.append("")
-    lines.append("**Same TARGET normalization as baseline 6** (only the vectorizer differs).")
-    lines.append("")
+    # ---- Baseline 8: Length ----
+    lines.append(_format_structured_baseline(
+        item, names, gi, train_items, test_items,
+        baseline_num=8, baseline_name="Length Feature", func_name="pred_length",
+        col_selector=[4, 5],
+        feature_description=("For each candidate row, compute `target_length_sum` (total "
+                              "character length of evidence items containing TARGET) and its delta "
+                              "vs other candidates. Train logistic regression on [target, delta] features."),
+    ))
 
-    # Actual trained prediction
-    pred_char = pred_tfidf_char(train_items, test_items)
-    lines.append(f"**Trained prediction:** index {pred_char[0]} → \"{item['hypotheses'][pred_char[0]]}\"")
-    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
-    lines.append(f"**Correct:** {pred_char[0] == gi}")
-    lines.append("")
+    # ---- Baseline 9: Mention + Evidence ----
+    lines.append(_format_structured_baseline(
+        item, names, gi, train_items, test_items,
+        baseline_num=9, baseline_name="Mention + Evidence", func_name="pred_mention_evidence",
+        col_selector=[0, 1, 2, 3],
+        feature_description=("TARGET-normalized mention count and evidence count features. "
+                              "Columns [0,1,2,3] = target_mention, delta_mention, "
+                              "target_evidence, delta_evidence."),
+    ))
 
-    # ---- Baselines 8-11: Structured features (TARGET-normalized) ----
-    lines.append("---")
-    lines.append("## 8. Length Feature (`pred_length`)")
-    lines.append("")
-    lines.append("**Logic:** For each candidate row, compute `target_length_sum` (total")
-    lines.append("character length of evidence items containing TARGET) and its delta")
-    lines.append("vs other candidates. Train logistic regression on [target, delta] features.")
-    lines.append("")
-    lines.append("**Structured features for this item (TARGET-normalized):**")
-    lines.append("")
-    feat_names_all = ['mention_count', 'evidence_count', 'length_sum', 'first_mention_pos']
-    for j in range(len(item["hypotheses"])):
-        feats = _compute_candidate_features(item, j)
-        lines.append(f"  - Candidate {j} ({names[j]} → TARGET):")
-        lines.append(f"    length_sum = {feats['length_sum']}")
-    lines.append("")
-    lines.append("**Training uses columns [4, 5]** = target_length_sum, delta_length_sum.")
-    lines.append("")
+    # ---- Baseline 10: First Mention Order ----
+    lines.append(_format_structured_baseline(
+        item, names, gi, train_items, test_items,
+        baseline_num=10, baseline_name="First Mention Order", func_name="pred_first_mention_order",
+        col_selector=[6, 7],
+        feature_description=("For each candidate, find the character position of the first "
+                              "TARGET occurrence in TARGET-normalized text (normalized by text length). "
+                              "Earlier mention -> smaller value -> potentially more salient."),
+    ))
 
-    # Actual trained prediction
-    pred_len = pred_length(train_items, test_items)
-    lines.append(f"**Trained prediction:** index {pred_len[0]} → \"{item['hypotheses'][pred_len[0]]}\"")
-    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
-    lines.append(f"**Correct:** {pred_len[0] == gi}")
-    lines.append("")
+    # ---- Baseline 11: Combined Shallow ----
+    lines.append(_format_structured_baseline(
+        item, names, gi, train_items, test_items,
+        baseline_num=11, baseline_name="Combined Shallow", func_name="pred_combined",
+        col_selector=None,
+        feature_description=("All 8 structured features combined (4 raw + 4 delta). "
+                              "This is the strongest structured baseline, using mention count, "
+                              "evidence count, length, and first-mention position together."),
+    ))
 
-    lines.append("---")
-    lines.append("## 9. Mention + Evidence (`pred_mention_evidence`)")
-    lines.append("")
-    lines.append("**Logic:** TARGET-normalized mention count and evidence count features.")
-    lines.append("Columns [0,1,2,3] = target_mention, delta_mention, target_evidence, delta_evidence.")
-    lines.append("")
-    for j in range(len(item["hypotheses"])):
-        feats = _compute_candidate_features(item, j)
-        lines.append(f"  - Candidate {j} ({names[j]} → TARGET):")
-        lines.append(f"    mention_count={feats['mention_count']}, evidence_count={feats['evidence_count']}")
-    lines.append("")
-
-    # Actual trained prediction
-    pred_me = pred_mention_evidence(train_items, test_items)
-    lines.append(f"**Trained prediction:** index {pred_me[0]} → \"{item['hypotheses'][pred_me[0]]}\"")
-    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
-    lines.append(f"**Correct:** {pred_me[0] == gi}")
-    lines.append("")
-
-    lines.append("---")
-    lines.append("## 10. First Mention Order (`pred_first_mention_order`)")
-    lines.append("")
-    lines.append("**Logic:** For each candidate, find the character position of the first")
-    lines.append("TARGET occurrence in TARGET-normalized text (normalized by text length).")
-    lines.append("Earlier mention → smaller value → potentially more salient.")
-    lines.append("")
-    for j in range(len(item["hypotheses"])):
-        feats = _compute_candidate_features(item, j)
-        lines.append(f"  - Candidate {j} ({names[j]} → TARGET):")
-        lines.append(f"    first_mention_pos = {feats['first_mention_pos']:.4f}")
-    lines.append("")
-    lines.append("**Training uses columns [6, 7]** = target_first_mention_pos, delta_first_mention_pos.")
-    lines.append("")
-
-    # Actual trained prediction
-    pred_fmo = pred_first_mention_order(train_items, test_items)
-    lines.append(f"**Trained prediction:** index {pred_fmo[0]} → \"{item['hypotheses'][pred_fmo[0]]}\"")
-    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
-    lines.append(f"**Correct:** {pred_fmo[0] == gi}")
-    lines.append("")
-
-    lines.append("---")
-    lines.append("## 11. Combined Shallow (`pred_combined`)")
-    lines.append("")
-    lines.append("**Logic:** All 8 structured features combined (4 raw + 4 delta).")
-    lines.append("This is the strongest structured baseline, using mention count,")
-    lines.append("evidence count, length, and first-mention position together.")
-    lines.append("")
-    lines.append("**Full feature vector for this item:**")
-    lines.append("")
-    for j in range(len(item["hypotheses"])):
-        feats = _compute_candidate_features(item, j)
-        others = [_compute_candidate_features(item, k) for k in range(len(item["hypotheses"])) if k != j]
-        row = []
-        for fn in feat_names_all:
-            t_val = feats[fn]
-            o_mean = np.mean([o[fn] for o in others])
-            row.append(f"{fn}_t={t_val:.3f}")
-            row.append(f"{fn}_d={t_val - o_mean:.3f}")
-        lines.append(f"  - Candidate {j}: [{', '.join(row)}]")
-    lines.append("")
-
-    # Actual trained prediction
-    pred_comb = pred_combined(train_items, test_items)
-    lines.append(f"**Trained prediction:** index {pred_comb[0]} → \"{item['hypotheses'][pred_comb[0]]}\"")
-    lines.append(f"**Gold:** index {gi} → \"{item['gold_answer']}\"")
-    lines.append(f"**Correct:** {pred_comb[0] == gi}")
-    lines.append("")
     lines.append("**Why at chance if no leak:** When evidence is balanced across candidates")
     lines.append("(each mentioned equally regardless of who is guilty), all features are")
-    lines.append("~equal across gold and non-gold rows → classifier learns nothing → ~1/K.")
+    lines.append("~equal across gold and non-gold rows -> classifier learns nothing -> ~1/K.")
     lines.append("")
 
     # ---- Gate computation example ----
@@ -484,7 +618,6 @@ def generate_examples():
     lines.append("")
     lines.append("For a baseline with N=200 items at 3 options (chance=1/3):")
     lines.append("")
-    # Example: 70 correct out of 200
     k, n = 70, 200
     ci_lo, ci_hi = wilson_ci(k, n)
     chance = 1/3

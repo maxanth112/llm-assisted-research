@@ -1,7 +1,9 @@
 # Leakage Baseline Worked Examples
 
-Phase A.2 Work Item 5: One hand-auditable worked example per baseline,
-computed on a single concrete item using the actual predictor implementations.
+Phase A.2 Work Item 5 (corrective rewrite): One hand-auditable worked
+example per baseline, computed on a single concrete item using the actual
+predictor implementations. Includes fitted candidate probabilities for
+all trained baselines (6-11).
 
 ## Example Item
 
@@ -24,7 +26,7 @@ computed on a single concrete item using the actual predictor implementations.
 label from the training set).
 
 - Majority label (from training): 0
-- **Prediction:** index 0 → "Alice Chen is responsible"
+- **Prediction:** index 0 -> "Alice Chen is responsible"
 - **Correct:** True
 
 **Why at chance:** In a balanced corpus with K candidates, each candidate
@@ -35,7 +37,7 @@ is gold ~1/K of the time. Always predicting the same one gives ~1/K accuracy.
 
 **Logic:** Always predict index 0 (first hypothesis).
 
-- **Prediction:** index 0 → "Alice Chen is responsible"
+- **Prediction:** index 0 -> "Alice Chen is responsible"
 - **Correct:** True
 
 **Why at chance:** If gold positions are uniformly distributed (enforced
@@ -52,8 +54,8 @@ occurrences in `narrative + evidence`. Predict the most-mentioned suspect.
   - "alice chen": count = 3
   - "bob martinez": count = 2
   - "carol davis": count = 2
-- Argmax → index 0
-- **Prediction:** index 0 → "Alice Chen is responsible"
+- Argmax -> index 0
+- **Prediction:** index 0 -> "Alice Chen is responsible"
 - **Correct:** True
 
 **Why at chance if no leak:** If evidence mentions each suspect equally
@@ -68,8 +70,8 @@ Predict the suspect mentioned in the most evidence items.
   - "alice chen": appears in 2/4 evidence items
   - "bob martinez": appears in 1/4 evidence items
   - "carol davis": appears in 1/4 evidence items
-- Argmax → index 0
-- **Prediction:** index 0 → "Alice Chen is responsible"
+- Argmax -> index 0
+- **Prediction:** index 0 -> "Alice Chen is responsible"
 - **Correct:** True
 
 ---
@@ -81,8 +83,8 @@ hypothesis and the evidence text. Predict the hypothesis with most overlap.
   - "Alice Chen is responsible": overlap = 2 words (['alice', 'chen'])
   - "Bob Martinez is responsible": overlap = 2 words (['bob', 'martinez'])
   - "Carol Davis is responsible": overlap = 2 words (['carol', 'davis'])
-- Argmax → index 0
-- **Prediction:** index 0 → "Alice Chen is responsible"
+- Argmax -> index 0
+- **Prediction:** index 0 -> "Alice Chen is responsible"
 - **Correct:** True
 
 ---
@@ -107,24 +109,28 @@ Predict the candidate with highest P(gold=1).
 
 **TARGET normalization for this item:**
 
-  - Candidate 0 ("Alice Chen" → TARGET):
+  - Candidate 0 ("Alice Chen" -> TARGET):
     "TARGET is responsible [SEP] A fire broke out at the downtown warehouse on Tuesday night. Three employees had access: TARGET, OTHER_1, and OTHER_2. Sec..."
-  - Candidate 1 ("Bob Martinez" → TARGET):
+  - Candidate 1 ("Bob Martinez" -> TARGET):
     "TARGET is responsible [SEP] A fire broke out at the downtown warehouse on Tuesday night. Three employees had access: OTHER_1, TARGET, and OTHER_2. Sec..."
-  - Candidate 2 ("Carol Davis" → TARGET):
+  - Candidate 2 ("Carol Davis" -> TARGET):
     "TARGET is responsible [SEP] A fire broke out at the downtown warehouse on Tuesday night. Three employees had access: OTHER_1, OTHER_2, and TARGET. Sec..."
 
 **Key insight:** Each candidate row has DIFFERENT text because the
-TARGET/OTHER_k placeholders differ. This is what Phase A.2 fixed —
-in A.1, all rows had identical context (candidate name differences
-cancelled in TF-IDF).
+TARGET/OTHER_k placeholders differ.
 
-**Trained prediction:** index 0 → "Alice Chen is responsible"
-**Gold:** index 0 → "Alice Chen is responsible"
+**Fitted candidate probabilities P(gold=1):**
+
+  - Candidate 0 (Alice Chen): P(gold=1) = 0.3509 <-- argmax
+  - Candidate 1 (Bob Martinez): P(gold=1) = 0.3351
+  - Candidate 2 (Carol Davis): P(gold=1) = 0.3278
+
+**Prediction:** index 0 -> "Alice Chen is responsible"
+**Gold:** index 0 -> "Alice Chen is responsible"
 **Correct:** True
 
 **Why at chance if no leak:** In a non-leaking corpus, TARGET mentions are
-balanced across gold/non-gold rows → classifier learns nothing → ~1/K.
+balanced across gold/non-gold rows -> classifier learns nothing -> ~1/K.
 
 ---
 ## 7. TF-IDF Char (`pred_tfidf_char`)
@@ -132,91 +138,146 @@ balanced across gold/non-gold rows → classifier learns nothing → ~1/K.
 **Logic:** Same as baseline 6 but with character n-grams (2-4, char_wb).
 This catches subword patterns that word-level TF-IDF misses.
 
-**Same TARGET normalization as baseline 6** (only the vectorizer differs).
+**Fitted candidate probabilities P(gold=1):**
 
-**Trained prediction:** index 0 → "Alice Chen is responsible"
-**Gold:** index 0 → "Alice Chen is responsible"
+  - Candidate 0 (Alice Chen): P(gold=1) = 0.3415 <-- argmax
+  - Candidate 1 (Bob Martinez): P(gold=1) = 0.3331
+  - Candidate 2 (Carol Davis): P(gold=1) = 0.3331
+
+**Prediction:** index 0 -> "Alice Chen is responsible"
+**Gold:** index 0 -> "Alice Chen is responsible"
 **Correct:** True
 
 ---
 ## 8. Length Feature (`pred_length`)
 
-**Logic:** For each candidate row, compute `target_length_sum` (total
-character length of evidence items containing TARGET) and its delta
-vs other candidates. Train logistic regression on [target, delta] features.
+**Logic:** For each candidate row, compute `target_length_sum` (total character length of evidence items containing TARGET) and its delta vs other candidates. Train logistic regression on [target, delta] features.
 
 **Structured features for this item (TARGET-normalized):**
 
-  - Candidate 0 (Alice Chen → TARGET):
-    length_sum = 194
-  - Candidate 1 (Bob Martinez → TARGET):
-    length_sum = 75
-  - Candidate 2 (Carol Davis → TARGET):
-    length_sum = 76
+  - Candidate 0 (Alice Chen -> TARGET):
+    length_sum = 194, delta = 118.5
+  - Candidate 1 (Bob Martinez -> TARGET):
+    length_sum = 75, delta = -60.0
+  - Candidate 2 (Carol Davis -> TARGET):
+    length_sum = 76, delta = -58.5
 
-**Training uses columns [4, 5]** = target_length_sum, delta_length_sum.
+**Training uses feature columns [4, 5].**
 
-**Trained prediction:** index 0 → "Alice Chen is responsible"
-**Gold:** index 0 → "Alice Chen is responsible"
+**Classifier coefficients:**
+  - Intercept: -12.8799
+  - length_sum_t: 0.0872
+  - length_sum_d: 0.1776
+
+**Fitted candidate probabilities P(gold=1):**
+
+  - Candidate 0 (Alice Chen): P(gold=1) = 1.0000 <-- argmax
+  - Candidate 1 (Bob Martinez): P(gold=1) = 0.0000
+  - Candidate 2 (Carol Davis): P(gold=1) = 0.0000
+
+**Prediction:** index 0 -> "Alice Chen is responsible"
+**Gold:** index 0 -> "Alice Chen is responsible"
 **Correct:** True
 
 ---
 ## 9. Mention + Evidence (`pred_mention_evidence`)
 
-**Logic:** TARGET-normalized mention count and evidence count features.
-Columns [0,1,2,3] = target_mention, delta_mention, target_evidence, delta_evidence.
+**Logic:** TARGET-normalized mention count and evidence count features. Columns [0,1,2,3] = target_mention, delta_mention, target_evidence, delta_evidence.
 
-  - Candidate 0 (Alice Chen → TARGET):
-    mention_count=3, evidence_count=2
-  - Candidate 1 (Bob Martinez → TARGET):
-    mention_count=2, evidence_count=1
-  - Candidate 2 (Carol Davis → TARGET):
-    mention_count=2, evidence_count=1
+**Structured features for this item (TARGET-normalized):**
 
-**Trained prediction:** index 0 → "Alice Chen is responsible"
-**Gold:** index 0 → "Alice Chen is responsible"
+  - Candidate 0 (Alice Chen -> TARGET):
+    mention_count=3 (delta=1.0), evidence_count=2 (delta=1.0)
+  - Candidate 1 (Bob Martinez -> TARGET):
+    mention_count=2 (delta=-0.5), evidence_count=1 (delta=-0.5)
+  - Candidate 2 (Carol Davis -> TARGET):
+    mention_count=2 (delta=-0.5), evidence_count=1 (delta=-0.5)
+
+**Training uses feature columns [0, 1, 2, 3].**
+
+**Classifier coefficients:**
+  - Intercept: -3.8316
+  - mention_count_t: 0.7267
+  - mention_count_d: 1.0901
+  - evidence_count_t: 0.7267
+  - evidence_count_d: 1.0901
+
+**Fitted candidate probabilities P(gold=1):**
+
+  - Candidate 0 (Alice Chen): P(gold=1) = 0.8789 <-- argmax
+  - Candidate 1 (Bob Martinez): P(gold=1) = 0.0606
+  - Candidate 2 (Carol Davis): P(gold=1) = 0.0606
+
+**Prediction:** index 0 -> "Alice Chen is responsible"
+**Gold:** index 0 -> "Alice Chen is responsible"
 **Correct:** True
 
 ---
 ## 10. First Mention Order (`pred_first_mention_order`)
 
-**Logic:** For each candidate, find the character position of the first
-TARGET occurrence in TARGET-normalized text (normalized by text length).
-Earlier mention → smaller value → potentially more salient.
+**Logic:** For each candidate, find the character position of the first TARGET occurrence in TARGET-normalized text (normalized by text length). Earlier mention -> smaller value -> potentially more salient.
 
-  - Candidate 0 (Alice Chen → TARGET):
-    first_mention_pos = 0.1742
-  - Candidate 1 (Bob Martinez → TARGET):
-    first_mention_pos = 0.1914
-  - Candidate 2 (Carol Davis → TARGET):
-    first_mention_pos = 0.2168
+**Structured features for this item (TARGET-normalized):**
 
-**Training uses columns [6, 7]** = target_first_mention_pos, delta_first_mention_pos.
+  - Candidate 0 (Alice Chen -> TARGET):
+    first_mention_pos = 0.1742 (delta = -0.0299)
+  - Candidate 1 (Bob Martinez -> TARGET):
+    first_mention_pos = 0.1914 (delta = -0.0041)
+  - Candidate 2 (Carol Davis -> TARGET):
+    first_mention_pos = 0.2168 (delta = 0.0340)
 
-**Trained prediction:** index 2 → "Carol Davis is responsible"
-**Gold:** index 0 → "Alice Chen is responsible"
+**Training uses feature columns [6, 7].**
+
+**Classifier coefficients:**
+  - Intercept: -0.6933
+  - first_mention_pos_t: 0.0011
+  - first_mention_pos_d: 0.0015
+
+**Fitted candidate probabilities P(gold=1):**
+
+  - Candidate 0 (Alice Chen): P(gold=1) = 0.3333
+  - Candidate 1 (Bob Martinez): P(gold=1) = 0.3333
+  - Candidate 2 (Carol Davis): P(gold=1) = 0.3334 <-- argmax
+
+**Prediction:** index 2 -> "Carol Davis is responsible"
+**Gold:** index 0 -> "Alice Chen is responsible"
 **Correct:** False
 
 ---
 ## 11. Combined Shallow (`pred_combined`)
 
-**Logic:** All 8 structured features combined (4 raw + 4 delta).
-This is the strongest structured baseline, using mention count,
-evidence count, length, and first-mention position together.
+**Logic:** All 8 structured features combined (4 raw + 4 delta). This is the strongest structured baseline, using mention count, evidence count, length, and first-mention position together.
 
-**Full feature vector for this item:**
+**Structured features for this item (TARGET-normalized):**
 
-  - Candidate 0: [mention_count_t=3.000, mention_count_d=1.000, evidence_count_t=2.000, evidence_count_d=1.000, length_sum_t=194.000, length_sum_d=118.500, first_mention_pos_t=0.174, first_mention_pos_d=-0.030]
-  - Candidate 1: [mention_count_t=2.000, mention_count_d=-0.500, evidence_count_t=1.000, evidence_count_d=-0.500, length_sum_t=75.000, length_sum_d=-60.000, first_mention_pos_t=0.191, first_mention_pos_d=-0.004]
-  - Candidate 2: [mention_count_t=2.000, mention_count_d=-0.500, evidence_count_t=1.000, evidence_count_d=-0.500, length_sum_t=76.000, length_sum_d=-58.500, first_mention_pos_t=0.217, first_mention_pos_d=0.034]
+  - Candidate 0 (Alice Chen -> TARGET): [mention_count_t=3.000, mention_count_d=1.000, evidence_count_t=2.000, evidence_count_d=1.000, length_sum_t=194.000, length_sum_d=118.500, first_mention_pos_t=0.174, first_mention_pos_d=-0.030]
+  - Candidate 1 (Bob Martinez -> TARGET): [mention_count_t=2.000, mention_count_d=-0.500, evidence_count_t=1.000, evidence_count_d=-0.500, length_sum_t=75.000, length_sum_d=-60.000, first_mention_pos_t=0.191, first_mention_pos_d=-0.004]
+  - Candidate 2 (Carol Davis -> TARGET): [mention_count_t=2.000, mention_count_d=-0.500, evidence_count_t=1.000, evidence_count_d=-0.500, length_sum_t=76.000, length_sum_d=-58.500, first_mention_pos_t=0.217, first_mention_pos_d=0.034]
 
-**Trained prediction:** index 0 → "Alice Chen is responsible"
-**Gold:** index 0 → "Alice Chen is responsible"
+**Classifier coefficients:**
+  - Intercept: -12.8752
+  - mention_count_t: 0.0040
+  - mention_count_d: 0.0038
+  - evidence_count_t: 0.0033
+  - evidence_count_d: 0.0038
+  - length_sum_t: 0.0870
+  - length_sum_d: 0.1774
+  - first_mention_pos_t: 0.0004
+  - first_mention_pos_d: 0.0002
+
+**Fitted candidate probabilities P(gold=1):**
+
+  - Candidate 0 (Alice Chen): P(gold=1) = 1.0000 <-- argmax
+  - Candidate 1 (Bob Martinez): P(gold=1) = 0.0000
+  - Candidate 2 (Carol Davis): P(gold=1) = 0.0000
+
+**Prediction:** index 0 -> "Alice Chen is responsible"
+**Gold:** index 0 -> "Alice Chen is responsible"
 **Correct:** True
 
 **Why at chance if no leak:** When evidence is balanced across candidates
 (each mentioned equally regardless of who is guilty), all features are
-~equal across gold and non-gold rows → classifier learns nothing → ~1/K.
+~equal across gold and non-gold rows -> classifier learns nothing -> ~1/K.
 
 ---
 ## Gate Computation Example
