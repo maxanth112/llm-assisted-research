@@ -1,0 +1,886 @@
+{
+  "description": "Power extension for 5pp effect, k_runs=1",
+  "n_sims": 2000,
+  "n_items_range": [
+    1250,
+    1500,
+    1750,
+    2000
+  ],
+  "delta_D_range": [
+    0.0,
+    0.05
+  ],
+  "k_runs": 1,
+  "sigma_item": 0.5,
+  "alpha": 0.05,
+  "seed": 42,
+  "per_model_results": {
+    "Llama-3.3-70B": [
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 1250,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0605,
+        "power_primary_mc_se": 0.0053,
+        "power_primary_mc_ci": [
+          0.0501,
+          0.0709
+        ],
+        "power_mcnemar_101v100": 0.0505,
+        "power_mcnemar_111v110": 0.0445,
+        "mean_contrast": -0.00061,
+        "sd_contrast": 0.01367
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 1250,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.9275,
+        "power_primary_mc_se": 0.0058,
+        "power_primary_mc_ci": [
+          0.9161,
+          0.9389
+        ],
+        "power_mcnemar_101v100": 0.672,
+        "power_mcnemar_111v110": 0.6645,
+        "mean_contrast": 0.04702,
+        "sd_contrast": 0.01395
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 1500,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.04,
+        "power_primary_mc_se": 0.0044,
+        "power_primary_mc_ci": [
+          0.0314,
+          0.0486
+        ],
+        "power_mcnemar_101v100": 0.047,
+        "power_mcnemar_111v110": 0.044,
+        "mean_contrast": 4e-05,
+        "sd_contrast": 0.01195
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 1500,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.969,
+        "power_primary_mc_se": 0.0039,
+        "power_primary_mc_ci": [
+          0.9614,
+          0.9766
+        ],
+        "power_mcnemar_101v100": 0.764,
+        "power_mcnemar_111v110": 0.756,
+        "mean_contrast": 0.04764,
+        "sd_contrast": 0.01256
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 1750,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.055,
+        "power_primary_mc_se": 0.0051,
+        "power_primary_mc_ci": [
+          0.045,
+          0.065
+        ],
+        "power_mcnemar_101v100": 0.049,
+        "power_mcnemar_111v110": 0.046,
+        "mean_contrast": 9e-05,
+        "sd_contrast": 0.0116
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 1750,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.983,
+        "power_primary_mc_se": 0.0029,
+        "power_primary_mc_ci": [
+          0.9773,
+          0.9887
+        ],
+        "power_mcnemar_101v100": 0.8105,
+        "power_mcnemar_111v110": 0.8305,
+        "mean_contrast": 0.04748,
+        "sd_contrast": 0.01155
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 2000,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0545,
+        "power_primary_mc_se": 0.0051,
+        "power_primary_mc_ci": [
+          0.0446,
+          0.0644
+        ],
+        "power_mcnemar_101v100": 0.048,
+        "power_mcnemar_111v110": 0.0495,
+        "mean_contrast": -0.00012,
+        "sd_contrast": 0.01079
+      },
+      {
+        "model": "Llama-3.3-70B",
+        "p0": 0.4,
+        "n_items": 2000,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.9945,
+        "power_primary_mc_se": 0.0017,
+        "power_primary_mc_ci": [
+          0.9913,
+          0.9977
+        ],
+        "power_mcnemar_101v100": 0.875,
+        "power_mcnemar_111v110": 0.8665,
+        "mean_contrast": 0.04751,
+        "sd_contrast": 0.01081
+      }
+    ],
+    "Qwen2.5-72B": [
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 1250,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0515,
+        "power_primary_mc_se": 0.0049,
+        "power_primary_mc_ci": [
+          0.0418,
+          0.0612
+        ],
+        "power_mcnemar_101v100": 0.048,
+        "power_mcnemar_111v110": 0.0455,
+        "mean_contrast": -0.00013,
+        "sd_contrast": 0.01355
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 1250,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.9295,
+        "power_primary_mc_se": 0.0057,
+        "power_primary_mc_ci": [
+          0.9183,
+          0.9407
+        ],
+        "power_mcnemar_101v100": 0.674,
+        "power_mcnemar_111v110": 0.6755,
+        "mean_contrast": 0.04714,
+        "sd_contrast": 0.01378
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 1500,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0465,
+        "power_primary_mc_se": 0.0047,
+        "power_primary_mc_ci": [
+          0.0373,
+          0.0557
+        ],
+        "power_mcnemar_101v100": 0.0435,
+        "power_mcnemar_111v110": 0.05,
+        "mean_contrast": 0.00021,
+        "sd_contrast": 0.01237
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 1500,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.968,
+        "power_primary_mc_se": 0.0039,
+        "power_primary_mc_ci": [
+          0.9603,
+          0.9757
+        ],
+        "power_mcnemar_101v100": 0.7535,
+        "power_mcnemar_111v110": 0.7475,
+        "mean_contrast": 0.04728,
+        "sd_contrast": 0.01246
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 1750,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.048,
+        "power_primary_mc_se": 0.0048,
+        "power_primary_mc_ci": [
+          0.0386,
+          0.0574
+        ],
+        "power_mcnemar_101v100": 0.0385,
+        "power_mcnemar_111v110": 0.0415,
+        "mean_contrast": 2e-05,
+        "sd_contrast": 0.01134
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 1750,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.98,
+        "power_primary_mc_se": 0.0031,
+        "power_primary_mc_ci": [
+          0.9739,
+          0.9861
+        ],
+        "power_mcnemar_101v100": 0.803,
+        "power_mcnemar_111v110": 0.8065,
+        "mean_contrast": 0.04686,
+        "sd_contrast": 0.01156
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 2000,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0495,
+        "power_primary_mc_se": 0.0049,
+        "power_primary_mc_ci": [
+          0.04,
+          0.059
+        ],
+        "power_mcnemar_101v100": 0.0475,
+        "power_mcnemar_111v110": 0.046,
+        "mean_contrast": 0.00027,
+        "sd_contrast": 0.01083
+      },
+      {
+        "model": "Qwen2.5-72B",
+        "p0": 0.45,
+        "n_items": 2000,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.993,
+        "power_primary_mc_se": 0.0019,
+        "power_primary_mc_ci": [
+          0.9893,
+          0.9967
+        ],
+        "power_mcnemar_101v100": 0.867,
+        "power_mcnemar_111v110": 0.8685,
+        "mean_contrast": 0.0475,
+        "sd_contrast": 0.01067
+      }
+    ],
+    "proprietary": [
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 1250,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0545,
+        "power_primary_mc_se": 0.0051,
+        "power_primary_mc_ci": [
+          0.0446,
+          0.0644
+        ],
+        "power_mcnemar_101v100": 0.05,
+        "power_mcnemar_111v110": 0.043,
+        "mean_contrast": 0.00017,
+        "sd_contrast": 0.01363
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 1250,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.9395,
+        "power_primary_mc_se": 0.0053,
+        "power_primary_mc_ci": [
+          0.9291,
+          0.9499
+        ],
+        "power_mcnemar_101v100": 0.676,
+        "power_mcnemar_111v110": 0.6805,
+        "mean_contrast": 0.04751,
+        "sd_contrast": 0.01343
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 1500,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0555,
+        "power_primary_mc_se": 0.0051,
+        "power_primary_mc_ci": [
+          0.0455,
+          0.0655
+        ],
+        "power_mcnemar_101v100": 0.046,
+        "power_mcnemar_111v110": 0.053,
+        "mean_contrast": -9e-05,
+        "sd_contrast": 0.01263
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 1500,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.9745,
+        "power_primary_mc_se": 0.0035,
+        "power_primary_mc_ci": [
+          0.9676,
+          0.9814
+        ],
+        "power_mcnemar_101v100": 0.7705,
+        "power_mcnemar_111v110": 0.75,
+        "mean_contrast": 0.04763,
+        "sd_contrast": 0.01211
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 1750,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.0525,
+        "power_primary_mc_se": 0.005,
+        "power_primary_mc_ci": [
+          0.0427,
+          0.0623
+        ],
+        "power_mcnemar_101v100": 0.05,
+        "power_mcnemar_111v110": 0.0365,
+        "mean_contrast": -0.00019,
+        "sd_contrast": 0.01151
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 1750,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.987,
+        "power_primary_mc_se": 0.0025,
+        "power_primary_mc_ci": [
+          0.982,
+          0.992
+        ],
+        "power_mcnemar_101v100": 0.833,
+        "power_mcnemar_111v110": 0.8225,
+        "mean_contrast": 0.04744,
+        "sd_contrast": 0.01136
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 2000,
+        "delta_D": 0.0,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.039,
+        "power_primary_mc_se": 0.0043,
+        "power_primary_mc_ci": [
+          0.0305,
+          0.0475
+        ],
+        "power_mcnemar_101v100": 0.0475,
+        "power_mcnemar_111v110": 0.038,
+        "mean_contrast": -0.00018,
+        "sd_contrast": 0.01049
+      },
+      {
+        "model": "proprietary",
+        "p0": 0.55,
+        "n_items": 2000,
+        "delta_D": 0.05,
+        "sigma_item": 0.5,
+        "k_runs": 1,
+        "n_sims": 2000,
+        "power_primary": 0.9935,
+        "power_primary_mc_se": 0.0018,
+        "power_primary_mc_ci": [
+          0.99,
+          0.997
+        ],
+        "power_mcnemar_101v100": 0.8665,
+        "power_mcnemar_111v110": 0.852,
+        "mean_contrast": 0.04714,
+        "sd_contrast": 0.01101
+      }
+    ]
+  },
+  "combined_power_curve": {
+    "Llama-3.3-70B": [
+      {
+        "n_items": 200,
+        "power_primary": 0.324,
+        "power_primary_mc_se": 0.0209,
+        "power_primary_mc_ci": [
+          0.283,
+          0.365
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 300,
+        "power_primary": 0.4,
+        "power_primary_mc_se": 0.0219,
+        "power_primary_mc_ci": [
+          0.3571,
+          0.4429
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 500,
+        "power_primary": 0.588,
+        "power_primary_mc_se": 0.022,
+        "power_primary_mc_ci": [
+          0.5449,
+          0.6311
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 750,
+        "power_primary": 0.764,
+        "power_primary_mc_se": 0.019,
+        "power_primary_mc_ci": [
+          0.7268,
+          0.8012
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 1000,
+        "power_primary": 0.9,
+        "power_primary_mc_se": 0.0134,
+        "power_primary_mc_ci": [
+          0.8737,
+          0.9263
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 1250,
+        "power_primary": 0.9275,
+        "power_primary_mc_se": 0.0058,
+        "power_primary_mc_ci": [
+          0.9161,
+          0.9389
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 1500,
+        "power_primary": 0.969,
+        "power_primary_mc_se": 0.0039,
+        "power_primary_mc_ci": [
+          0.9614,
+          0.9766
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 1750,
+        "power_primary": 0.983,
+        "power_primary_mc_se": 0.0029,
+        "power_primary_mc_ci": [
+          0.9773,
+          0.9887
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 2000,
+        "power_primary": 0.9945,
+        "power_primary_mc_se": 0.0017,
+        "power_primary_mc_ci": [
+          0.9913,
+          0.9977
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      }
+    ],
+    "Qwen2.5-72B": [
+      {
+        "n_items": 200,
+        "power_primary": 0.26,
+        "power_primary_mc_se": 0.0196,
+        "power_primary_mc_ci": [
+          0.2216,
+          0.2984
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 300,
+        "power_primary": 0.4,
+        "power_primary_mc_se": 0.0219,
+        "power_primary_mc_ci": [
+          0.3571,
+          0.4429
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 500,
+        "power_primary": 0.548,
+        "power_primary_mc_se": 0.0223,
+        "power_primary_mc_ci": [
+          0.5044,
+          0.5916
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 750,
+        "power_primary": 0.734,
+        "power_primary_mc_se": 0.0198,
+        "power_primary_mc_ci": [
+          0.6953,
+          0.7727
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 1000,
+        "power_primary": 0.878,
+        "power_primary_mc_se": 0.0146,
+        "power_primary_mc_ci": [
+          0.8493,
+          0.9067
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 1250,
+        "power_primary": 0.9295,
+        "power_primary_mc_se": 0.0057,
+        "power_primary_mc_ci": [
+          0.9183,
+          0.9407
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 1500,
+        "power_primary": 0.968,
+        "power_primary_mc_se": 0.0039,
+        "power_primary_mc_ci": [
+          0.9603,
+          0.9757
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 1750,
+        "power_primary": 0.98,
+        "power_primary_mc_se": 0.0031,
+        "power_primary_mc_ci": [
+          0.9739,
+          0.9861
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 2000,
+        "power_primary": 0.993,
+        "power_primary_mc_se": 0.0019,
+        "power_primary_mc_ci": [
+          0.9893,
+          0.9967
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      }
+    ],
+    "proprietary": [
+      {
+        "n_items": 200,
+        "power_primary": 0.292,
+        "power_primary_mc_se": 0.0203,
+        "power_primary_mc_ci": [
+          0.2521,
+          0.3319
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 300,
+        "power_primary": 0.406,
+        "power_primary_mc_se": 0.022,
+        "power_primary_mc_ci": [
+          0.363,
+          0.449
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 500,
+        "power_primary": 0.578,
+        "power_primary_mc_se": 0.0221,
+        "power_primary_mc_ci": [
+          0.5347,
+          0.6213
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 750,
+        "power_primary": 0.792,
+        "power_primary_mc_se": 0.0182,
+        "power_primary_mc_ci": [
+          0.7564,
+          0.8276
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 1000,
+        "power_primary": 0.89,
+        "power_primary_mc_se": 0.014,
+        "power_primary_mc_ci": [
+          0.8626,
+          0.9174
+        ],
+        "n_sims": 500,
+        "source": "existing_refinement"
+      },
+      {
+        "n_items": 1250,
+        "power_primary": 0.9395,
+        "power_primary_mc_se": 0.0053,
+        "power_primary_mc_ci": [
+          0.9291,
+          0.9499
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 1500,
+        "power_primary": 0.9745,
+        "power_primary_mc_se": 0.0035,
+        "power_primary_mc_ci": [
+          0.9676,
+          0.9814
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 1750,
+        "power_primary": 0.987,
+        "power_primary_mc_se": 0.0025,
+        "power_primary_mc_ci": [
+          0.982,
+          0.992
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      },
+      {
+        "n_items": 2000,
+        "power_primary": 0.9935,
+        "power_primary_mc_se": 0.0018,
+        "power_primary_mc_ci": [
+          0.99,
+          0.997
+        ],
+        "n_sims": 2000,
+        "source": "extension"
+      }
+    ]
+  },
+  "smallest_n_table": [
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "delta_D": 0.05,
+      "k_runs": 1,
+      "target_power": 0.8,
+      "smallest_n": 1000,
+      "achieved_power": 0.9,
+      "mc_se": 0.0134,
+      "mc_ci": [
+        0.8737,
+        0.9263
+      ],
+      "n_sims": 500,
+      "source": "existing_refinement"
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "delta_D": 0.05,
+      "k_runs": 1,
+      "target_power": 0.9,
+      "smallest_n": 1000,
+      "achieved_power": 0.9,
+      "mc_se": 0.0134,
+      "mc_ci": [
+        0.8737,
+        0.9263
+      ],
+      "n_sims": 500,
+      "source": "existing_refinement"
+    },
+    {
+      "model": "Qwen2.5-72B",
+      "p0": 0.45,
+      "delta_D": 0.05,
+      "k_runs": 1,
+      "target_power": 0.8,
+      "smallest_n": 1000,
+      "achieved_power": 0.878,
+      "mc_se": 0.0146,
+      "mc_ci": [
+        0.8493,
+        0.9067
+      ],
+      "n_sims": 500,
+      "source": "existing_refinement"
+    },
+    {
+      "model": "Qwen2.5-72B",
+      "p0": 0.45,
+      "delta_D": 0.05,
+      "k_runs": 1,
+      "target_power": 0.9,
+      "smallest_n": 1250,
+      "achieved_power": 0.9295,
+      "mc_se": 0.0057,
+      "mc_ci": [
+        0.9183,
+        0.9407
+      ],
+      "n_sims": 2000,
+      "source": "extension"
+    },
+    {
+      "model": "proprietary",
+      "p0": 0.55,
+      "delta_D": 0.05,
+      "k_runs": 1,
+      "target_power": 0.8,
+      "smallest_n": 1000,
+      "achieved_power": 0.89,
+      "mc_se": 0.014,
+      "mc_ci": [
+        0.8626,
+        0.9174
+      ],
+      "n_sims": 500,
+      "source": "existing_refinement"
+    },
+    {
+      "model": "proprietary",
+      "p0": 0.55,
+      "delta_D": 0.05,
+      "k_runs": 1,
+      "target_power": 0.9,
+      "smallest_n": 1250,
+      "achieved_power": 0.9395,
+      "mc_se": 0.0053,
+      "mc_ci": [
+        0.9291,
+        0.9499
+      ],
+      "n_sims": 2000,
+      "source": "extension"
+    }
+  ],
+  "elapsed_seconds": 192.1
+}
