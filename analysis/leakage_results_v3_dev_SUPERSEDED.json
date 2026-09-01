@@ -1,0 +1,767 @@
+{
+  "evaluator_version": "v3_dev_gate_SUPERSEDED",
+  "evaluation_date": "2026-09-01 04:37:18 UTC",
+  "corpus_config": {
+    "n_per_regime": 50,
+    "seed": 42,
+    "total_items": 200,
+    "chance_level": 0.25,
+    "threshold": 0.3
+  },
+  "surface_form_checks": {
+    "S1_option_count": {
+      "passed": true,
+      "details": "All 200 items have exactly 4 options"
+    },
+    "S2_abstention_position": {
+      "passed": true,
+      "per_regime": {
+        "CLEAN": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        },
+        "CONFLICT": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        },
+        "DECOY": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        },
+        "INSUFFICIENT": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        }
+      }
+    },
+    "S3_abstention_presence": {
+      "passed": true,
+      "details": "All 200 items contain an abstention option"
+    },
+    "S4_evidence_count": {
+      "passed": false,
+      "regime_pairs": {
+        "CLEAN_vs_CONFLICT": {
+          "passed": false,
+          "criterion": "identical sorted multiset (same size) or proportion diff <= 0.05 (different size)",
+          "ref_size": 50,
+          "other_size": 50
+        },
+        "CLEAN_vs_DECOY": {
+          "passed": false,
+          "criterion": "identical sorted multiset (same size) or proportion diff <= 0.05 (different size)",
+          "ref_size": 50,
+          "other_size": 50
+        },
+        "CLEAN_vs_INSUFFICIENT": {
+          "passed": true,
+          "criterion": "identical sorted multiset (same size) or proportion diff <= 0.05 (different size)",
+          "ref_size": 50,
+          "other_size": 50
+        }
+      }
+    },
+    "S5_option_text_length": {
+      "passed": true,
+      "per_regime": {
+        "CLEAN": {
+          "mean_length": 30.76,
+          "grand_mean": 30.76,
+          "relative_diff": 0.0001,
+          "margin": 0.2,
+          "criterion": "abs(regime_mean - grand_mean) / grand_mean <= 0.2",
+          "passed": true
+        },
+        "CONFLICT": {
+          "mean_length": 30.68,
+          "grand_mean": 30.76,
+          "relative_diff": 0.0026,
+          "margin": 0.2,
+          "criterion": "abs(regime_mean - grand_mean) / grand_mean <= 0.2",
+          "passed": true
+        },
+        "DECOY": {
+          "mean_length": 30.81,
+          "grand_mean": 30.76,
+          "relative_diff": 0.0017,
+          "margin": 0.2,
+          "criterion": "abs(regime_mean - grand_mean) / grand_mean <= 0.2",
+          "passed": true
+        },
+        "INSUFFICIENT": {
+          "mean_length": 30.78,
+          "grand_mean": 30.76,
+          "relative_diff": 0.0008,
+          "margin": 0.2,
+          "criterion": "abs(regime_mean - grand_mean) / grand_mean <= 0.2",
+          "passed": true
+        }
+      }
+    },
+    "S6_gold_position": {
+      "passed": true,
+      "per_regime": {
+        "CLEAN": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        },
+        "CONFLICT": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        },
+        "DECOY": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        },
+        "INSUFFICIENT": {
+          "counts": [
+            13,
+            13,
+            12,
+            12
+          ],
+          "max_diff": 1,
+          "criterion": "max_diff <= 1",
+          "passed": true
+        }
+      }
+    }
+  },
+  "template_held_out_results": {
+    "1_majority_class": {
+      "n_correct": 52,
+      "n_items": 200,
+      "accuracy": 0.26,
+      "ci_lower": 0.20414,
+      "ci_upper": 0.32491,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        }
+      }
+    },
+    "2_label_position": {
+      "n_correct": 52,
+      "n_items": 200,
+      "accuracy": 0.26,
+      "ci_lower": 0.20414,
+      "ci_upper": 0.32491,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        }
+      }
+    },
+    "3_mention_count": {
+      "n_correct": 52,
+      "n_items": 200,
+      "accuracy": 0.26,
+      "ci_lower": 0.20414,
+      "ci_upper": 0.32491,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 0,
+          "n_items": 50,
+          "accuracy": 0.0,
+          "ci_lower": 0.0,
+          "ci_upper": 0.07135,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "PASS"
+        }
+      }
+    },
+    "4_evidence_count": {
+      "n_correct": 52,
+      "n_items": 200,
+      "accuracy": 0.26,
+      "ci_lower": 0.20414,
+      "ci_upper": 0.32491,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 0,
+          "n_items": 50,
+          "accuracy": 0.0,
+          "ci_lower": 0.0,
+          "ci_upper": 0.07135,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "PASS"
+        }
+      }
+    },
+    "5_lexical_overlap": {
+      "n_correct": 65,
+      "n_items": 200,
+      "accuracy": 0.325,
+      "ci_lower": 0.26391,
+      "ci_upper": 0.39268,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        }
+      }
+    },
+    "6_tfidf_word": {
+      "n_correct": 96,
+      "n_items": 200,
+      "accuracy": 0.48,
+      "ci_lower": 0.41179,
+      "ci_upper": 0.54896,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 10,
+          "n_items": 50,
+          "accuracy": 0.2,
+          "ci_lower": 0.11244,
+          "ci_upper": 0.33037,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 50,
+          "n_items": 50,
+          "accuracy": 1.0,
+          "ci_lower": 0.92865,
+          "ci_upper": 1.0,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        }
+      }
+    },
+    "7_tfidf_char": {
+      "n_correct": 52,
+      "n_items": 200,
+      "accuracy": 0.26,
+      "ci_lower": 0.20414,
+      "ci_upper": 0.32491,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 0,
+          "n_items": 50,
+          "accuracy": 0.0,
+          "ci_lower": 0.0,
+          "ci_upper": 0.07135,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "PASS"
+        }
+      }
+    },
+    "8_length_feature": {
+      "n_correct": 54,
+      "n_items": 200,
+      "accuracy": 0.27,
+      "ci_lower": 0.21323,
+      "ci_upper": 0.33544,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 20,
+          "n_items": 50,
+          "accuracy": 0.4,
+          "ci_lower": 0.27608,
+          "ci_upper": 0.53819,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 19,
+          "n_items": 50,
+          "accuracy": 0.38,
+          "ci_lower": 0.25863,
+          "ci_upper": 0.5185,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 15,
+          "n_items": 50,
+          "accuracy": 0.3,
+          "ci_lower": 0.19103,
+          "ci_upper": 0.43751,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 0,
+          "n_items": 50,
+          "accuracy": 0.0,
+          "ci_lower": 0.0,
+          "ci_upper": 0.07135,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "PASS"
+        }
+      }
+    },
+    "9_mention_evidence": {
+      "n_correct": 52,
+      "n_items": 200,
+      "accuracy": 0.26,
+      "ci_lower": 0.20414,
+      "ci_upper": 0.32491,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 18,
+          "n_items": 50,
+          "accuracy": 0.36,
+          "ci_lower": 0.24139,
+          "ci_upper": 0.49859,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 0,
+          "n_items": 50,
+          "accuracy": 0.0,
+          "ci_lower": 0.0,
+          "ci_upper": 0.07135,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "PASS"
+        }
+      }
+    },
+    "10_first_mention_order": {
+      "n_correct": 51,
+      "n_items": 200,
+      "accuracy": 0.255,
+      "ci_lower": 0.1996,
+      "ci_upper": 0.31963,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 9,
+          "n_items": 50,
+          "accuracy": 0.18,
+          "ci_lower": 0.0977,
+          "ci_upper": 0.30796,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 16,
+          "n_items": 50,
+          "accuracy": 0.32,
+          "ci_lower": 0.20758,
+          "ci_upper": 0.45811,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 9,
+          "n_items": 50,
+          "accuracy": 0.18,
+          "ci_lower": 0.0977,
+          "ci_upper": 0.30796,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        }
+      }
+    },
+    "11_combined_shallow": {
+      "n_correct": 70,
+      "n_items": 200,
+      "accuracy": 0.35,
+      "ci_lower": 0.28729,
+      "ci_upper": 0.41837,
+      "chance": 0.25,
+      "threshold": 0.3,
+      "verdict": "FAIL",
+      "per_regime": {
+        "CLEAN": {
+          "n_correct": 21,
+          "n_items": 50,
+          "accuracy": 0.42,
+          "ci_lower": 0.29375,
+          "ci_upper": 0.55767,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "DECOY": {
+          "n_correct": 17,
+          "n_items": 50,
+          "accuracy": 0.34,
+          "ci_lower": 0.22437,
+          "ci_upper": 0.47846,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "CONFLICT": {
+          "n_correct": 13,
+          "n_items": 50,
+          "accuracy": 0.26,
+          "ci_lower": 0.15871,
+          "ci_upper": 0.39553,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        },
+        "INSUFFICIENT": {
+          "n_correct": 19,
+          "n_items": 50,
+          "accuracy": 0.38,
+          "ci_lower": 0.25863,
+          "ci_upper": 0.5185,
+          "chance": 0.25,
+          "threshold": 0.3,
+          "verdict": "FAIL"
+        }
+      }
+    }
+  },
+  "overall_verdict": "FAIL",
+  "failed_baselines": [
+    "1_majority_class",
+    "2_label_position",
+    "3_mention_count",
+    "4_evidence_count",
+    "5_lexical_overlap",
+    "6_tfidf_word",
+    "7_tfidf_char",
+    "8_length_feature",
+    "9_mention_evidence",
+    "10_first_mention_order",
+    "11_combined_shallow"
+  ]
+}
