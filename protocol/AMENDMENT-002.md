@@ -476,8 +476,60 @@ not in this Phase A commit.
 
 ---
 
+## 7. v3.2 Pre-Registered Gate Rules (FROZEN BEFORE v3.2 GENERATION)
+
+**Date frozen:** 2026-09-04
+**Status:** PRE-OUTCOME — committed BEFORE any v3.2 corpus is generated or
+any v3.2 classifier is run.
+
+### 7.1 Binary Counterfactual Sufficiency-Leakage Gate (DECISIVE)
+
+**Gate definition:** For BOTH the shallow unigram/character n-gram classifier
+AND the simple structured classifier, evaluated on answerable-vs-insufficient
+counterfactual pairs using pair-grouped AND template-family-grouped train/test
+splits (counterparts may never cross the split), the gate PASSES only if the
+one-sided 95% upper confidence bound on balanced accuracy is <= 0.55, where
+chance balanced accuracy = 0.50.
+
+**This rule is frozen prior to observing results.**
+
+Rationale: v3.2 constructs exact token-multiset-equal counterfactual pairs
+(answerable vs. insufficient). A binary classifier distinguishing the two
+members of a pair would indicate that surface features — rather than
+relational reasoning — distinguish answerable from insufficient items.
+Balanced accuracy is used because the two classes (answerable, insufficient)
+may have unequal representation. The 0.55 threshold (chance + 0.05) with
+one-sided 95% upper CI gives 5% Type-I error at chance.
+
+### 7.2 Four-Way D2 Regime Classifier (REPORTED DIAGNOSTIC, NOT A GATE)
+
+The four-way D2 regime classifier (predicting CLEAN/DECOY/CONFLICT/INSUFFICIENT
+from narrative + evidence context only) remains a REPORTED DIAGNOSTIC with
+feature importances. It is NOT a decisive gate.
+
+Rationale: The four regimes intentionally differ in evidence structure —
+CLEAN has confirmed alibis with cross-reference invalidation, DECOY adds
+motive decoys, CONFLICT introduces source-precedence disputes, and
+INSUFFICIENT uses unverifiable alibis. These structural differences are
+inherent to the diagnostic design and SHOULD produce some vocabulary signal.
+The D2 classifier accuracy quantifies this signal for transparency, but gating
+on it would penalize the generator for correctly implementing distinct regimes.
+
+The informative question is NOT "can context reveal the regime?" (yes, by
+design) but "can surface features distinguish answerable from insufficient
+within matched counterfactual pairs?" — which is exactly what the binary
+counterfactual gate (§7.1) tests.
+
+Feature importances from the four-way D2 classifier are reported to
+identify which specific vocabulary patterns drive regime separation,
+informing future generator refinements.
+
+---
+
 **Filed by:** Automated Phase A build
 **Governance note:** This amendment documents pre-specified design decisions
 for T2 v3. The acceptance criteria (sections 2-3) are specified before any
 v3 items exist. The evaluator corrections (section 1) are applied to the
-existing v2 data to establish accurate baselines.
+existing v2 data to establish accurate baselines. Section 7 was added as a
+pre-registered gate rule for v3.2, frozen before any v3.2 generation or
+evaluation.
