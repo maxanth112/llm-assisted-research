@@ -1,0 +1,193 @@
+{
+  "description": "Llama-3.3-70B power resolution for 5pp effect, k_runs=1 (PROVISIONAL)",
+  "model": "Llama-3.3-70B",
+  "p0": 0.4,
+  "n_sims": 2000,
+  "n_items_range": [
+    1250,
+    1500,
+    1750,
+    2000
+  ],
+  "delta_D_range": [
+    0.0,
+    0.05
+  ],
+  "k_runs": 1,
+  "sigma_item": 0.5,
+  "alpha": 0.05,
+  "seed": 42,
+  "results": [
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 1250,
+      "delta_D": 0.0,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.0605,
+      "power_primary_mc_se": 0.0053,
+      "power_primary_mc_ci": [
+        0.0501,
+        0.0709
+      ],
+      "power_mcnemar_101v100": 0.0505,
+      "power_mcnemar_111v110": 0.0445,
+      "mean_contrast": -0.00061,
+      "sd_contrast": 0.01367
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 1250,
+      "delta_D": 0.05,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.9275,
+      "power_primary_mc_se": 0.0058,
+      "power_primary_mc_ci": [
+        0.9161,
+        0.9389
+      ],
+      "power_mcnemar_101v100": 0.672,
+      "power_mcnemar_111v110": 0.6645,
+      "mean_contrast": 0.04702,
+      "sd_contrast": 0.01395
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 1500,
+      "delta_D": 0.0,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.04,
+      "power_primary_mc_se": 0.0044,
+      "power_primary_mc_ci": [
+        0.0314,
+        0.0486
+      ],
+      "power_mcnemar_101v100": 0.047,
+      "power_mcnemar_111v110": 0.044,
+      "mean_contrast": 4e-05,
+      "sd_contrast": 0.01195
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 1500,
+      "delta_D": 0.05,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.969,
+      "power_primary_mc_se": 0.0039,
+      "power_primary_mc_ci": [
+        0.9614,
+        0.9766
+      ],
+      "power_mcnemar_101v100": 0.764,
+      "power_mcnemar_111v110": 0.756,
+      "mean_contrast": 0.04764,
+      "sd_contrast": 0.01256
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 1750,
+      "delta_D": 0.0,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.055,
+      "power_primary_mc_se": 0.0051,
+      "power_primary_mc_ci": [
+        0.045,
+        0.065
+      ],
+      "power_mcnemar_101v100": 0.049,
+      "power_mcnemar_111v110": 0.046,
+      "mean_contrast": 9e-05,
+      "sd_contrast": 0.0116
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 1750,
+      "delta_D": 0.05,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.983,
+      "power_primary_mc_se": 0.0029,
+      "power_primary_mc_ci": [
+        0.9773,
+        0.9887
+      ],
+      "power_mcnemar_101v100": 0.8105,
+      "power_mcnemar_111v110": 0.8305,
+      "mean_contrast": 0.04748,
+      "sd_contrast": 0.01155
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 2000,
+      "delta_D": 0.0,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.0545,
+      "power_primary_mc_se": 0.0051,
+      "power_primary_mc_ci": [
+        0.0446,
+        0.0644
+      ],
+      "power_mcnemar_101v100": 0.048,
+      "power_mcnemar_111v110": 0.0495,
+      "mean_contrast": -0.00012,
+      "sd_contrast": 0.01079
+    },
+    {
+      "model": "Llama-3.3-70B",
+      "p0": 0.4,
+      "n_items": 2000,
+      "delta_D": 0.05,
+      "sigma_item": 0.5,
+      "k_runs": 1,
+      "n_sims": 2000,
+      "power_primary": 0.9945,
+      "power_primary_mc_se": 0.0017,
+      "power_primary_mc_ci": [
+        0.9913,
+        0.9977
+      ],
+      "power_mcnemar_101v100": 0.875,
+      "power_mcnemar_111v110": 0.8665,
+      "mean_contrast": 0.04751,
+      "sd_contrast": 0.01081
+    }
+  ],
+  "smallest_n_90_point": {
+    "n_items": 1250,
+    "achieved_power": 0.9275,
+    "mc_se": 0.0058,
+    "mc_ci": [
+      0.9161,
+      0.9389
+    ]
+  },
+  "smallest_n_90_ci": {
+    "n_items": 1250,
+    "achieved_power": 0.9275,
+    "mc_se": 0.0058,
+    "mc_ci": [
+      0.9161,
+      0.9389
+    ]
+  },
+  "elapsed_seconds": 64.8
+}
