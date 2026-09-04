@@ -476,32 +476,104 @@ not in this Phase A commit.
 
 ---
 
-## 7. v3.2 Pre-Registered Gate Rules (FROZEN BEFORE v3.2 GENERATION)
+## 7. v3.2 Pre-Registered Design and Gate Rules (FROZEN BEFORE v3.2 GENERATION)
 
-**Date frozen:** 2026-09-04
+**Date frozen:** 2026-09-04 (original §7); **revised** 2026-09-04
 **Status:** PRE-OUTCOME — committed BEFORE any v3.2 corpus is generated or
 any v3.2 classifier is run.
 
-### 7.1 Binary Counterfactual Sufficiency-Leakage Gate (DECISIVE)
+**Revision note:** This section supersedes the earlier §7 committed at
+`e19b452`. The earlier version specified a "structured classifier" gate and
+an "absent from / present at" substitution-based construction. That approach
+is REJECTED because it placed the answerability distinction in polarity
+tokens, enabling keyword-based shortcutting rather than requiring relational
+reasoning. The revised §7 below specifies a permutation-based construction
+with exact unigram-multiset preservation and a revised classifier rule.
 
-**Gate definition:** For BOTH the shallow unigram/character n-gram classifier
-AND the simple structured classifier, evaluated on answerable-vs-insufficient
-counterfactual pairs using pair-grouped AND template-family-grouped train/test
-splits (counterparts may never cross the split), the gate PASSES only if the
-one-sided 95% upper confidence bound on balanced accuracy is <= 0.55, where
-chance balanced accuracy = 0.50.
+### 7.1 Counterfactual-Pair Construction Decision (PERMUTATION / ENDPOINT-REWIRING)
+
+v3.2 constructs answerable/insufficient counterfactual pairs by **exact
+token-multiset-preserving permutation**: entities, predicates, evidence-slot
+templates, and the complete item-level unigram token multiset are held fixed.
+Entity assignments or relation endpoints are permuted across TWO OR MORE
+evidence slots so that the item-level unigram multiset is byte-for-byte
+identical between the answerable and insufficient pair members.
+
+**Intended mechanism:** The answerable member connects both necessary facts
+(e.g., access evidence + alibi invalidation) to the SAME suspect, yielding
+a unique conclusion. The insufficient member distributes those same facts
+across DIFFERENT suspects, leaving no uniquely-supported suspect. Same
+tokens, different relational graph.
+
+**Label assignment:** Labels (answerable / insufficient) are assigned by a
+deterministic symbolic rule engine that inspects the relational graph
+(uniqueness of support in the answerable member; no uniquely-supported
+suspect in the insufficient member). Labels are NEVER assigned by surface
+text inspection.
+
+### 7.2 Frozen Construction Invariants
+
+For every counterfactual pair, the following invariants MUST hold:
+
+| # | Invariant | Verification method |
+|---|-----------|-------------------|
+| C1 | Exact item-level unigram-multiset equality | `Counter(re.findall(r'\b\w+\b', text.lower()))` over narrative + all evidence content is identical between pair members |
+| C2 | Identical evidence counts | Both members have exactly `N_EVIDENCE_SLOTS` evidence items |
+| C3 | Identical option text | Hypothesis texts (and their templates) are identical between pair members |
+| C4 | Identical global entity/predicate frequencies | Each entity name appears the same number of times in both members |
+| C5 | Label difference caused SOLELY by the relational graph | The symbolic rule engine derives different labels from identical token inventories by inspecting which entity-slot connections differ |
+| C6 | Pair- and template-family-grouped eval splits | Counterpart items (answerable + insufficient twin) AND items from the same template family must never cross train/test split boundary |
+
+### 7.3 Positive Control: Deterministic Symbolic Oracle
+
+A deterministic relation-aware symbolic oracle/solver MUST achieve 100%
+accuracy on BOTH members of every pair. This oracle inspects the relational
+graph (entity-slot bindings) and applies the same logical rule the generator
+uses to assign labels. If the oracle fails on any item, the item is
+malformed and must not enter the corpus.
+
+### 7.4 Binary Non-Relational Baseline Gate (DECISIVE)
+
+**Gate definition:** For each NON-RELATIONAL baseline in the battery, the
+one-sided 95% upper confidence bound on balanced accuracy must be ≤ 0.55
+(chance balanced accuracy = 0.50), evaluated with pair-grouped AND
+template-family-grouped train/test splits (counterparts must never cross the
+split).
+
+**Non-relational baseline battery** (minimum required):
+
+| # | Baseline | Features received | Relational access |
+|---|----------|------------------|-------------------|
+| B1 | Word unigram TF-IDF | Bag of unigram tokens from narrative + evidence | None |
+| B2 | Character n-gram TF-IDF | Character 3-5 grams from narrative + evidence | None |
+| B3 | Evidence/token counts | Number of evidence slots, total token count, per-slot token counts | None |
+| B4 | Item and slot lengths | Character lengths of narrative, each evidence slot, total item | None |
+| B5 | Position features | Gold-answer position, abstention position | None |
+| B6 | Global polarity-token totals | Counts of words like "confirmed", "denied", "absent", "present", etc. across the full item | None |
+| B7 | Combined shallow | Union of B1-B6 features | None |
+
+For every baseline, the feature description is recorded so a reader can
+confirm it has no access to relational structure (entity-slot bindings,
+cross-reference targets, alibi-invalidation chains).
 
 **This rule is frozen prior to observing results.**
 
-Rationale: v3.2 constructs exact token-multiset-equal counterfactual pairs
-(answerable vs. insufficient). A binary classifier distinguishing the two
-members of a pair would indicate that surface features — rather than
-relational reasoning — distinguish answerable from insufficient items.
-Balanced accuracy is used because the two classes (answerable, insufficient)
-may have unequal representation. The 0.55 threshold (chance + 0.05) with
-one-sided 95% upper CI gives 5% Type-I error at chance.
+### 7.5 Revised Classifier Rule (SUPERSEDES EARLIER "STRUCTURED CLASSIFIER" RULE)
 
-### 7.2 Four-Way D2 Regime Classifier (REPORTED DIAGNOSTIC, NOT A GATE)
+Success by a classifier that ENCODES RELATION ENDPOINTS or performs the
+intended logical operation (i.e., inspects which suspect's alibi is
+invalidated by which cross-reference) is NOT leakage — it is a positive
+control that SHOULD succeed. Only SHALLOW NON-RELATIONAL features (as
+enumerated in §7.4) must remain near chance (≤ 0.55 upper bound).
+
+Rationale: The entire point of the permutation-based construction is that
+the label difference is carried solely by the relational graph. A classifier
+with access to relational structure SHOULD distinguish the pair members;
+failure to do so would indicate the construction is broken. Conversely, a
+classifier limited to surface features SHOULD NOT distinguish them; success
+would indicate surface leakage.
+
+### 7.6 Four-Way D2 Regime Classifier (REPORTED DIAGNOSTIC, NOT A GATE)
 
 The four-way D2 regime classifier (predicting CLEAN/DECOY/CONFLICT/INSUFFICIENT
 from narrative + evidence context only) remains a REPORTED DIAGNOSTIC with
@@ -510,15 +582,11 @@ feature importances. It is NOT a decisive gate.
 Rationale: The four regimes intentionally differ in evidence structure —
 CLEAN has confirmed alibis with cross-reference invalidation, DECOY adds
 motive decoys, CONFLICT introduces source-precedence disputes, and
-INSUFFICIENT uses unverifiable alibis. These structural differences are
-inherent to the diagnostic design and SHOULD produce some vocabulary signal.
-The D2 classifier accuracy quantifies this signal for transparency, but gating
-on it would penalize the generator for correctly implementing distinct regimes.
-
-The informative question is NOT "can context reveal the regime?" (yes, by
-design) but "can surface features distinguish answerable from insufficient
-within matched counterfactual pairs?" — which is exactly what the binary
-counterfactual gate (§7.1) tests.
+INSUFFICIENT has symmetric evidence with no uniquely-supported suspect.
+These structural differences are inherent to the diagnostic design and
+SHOULD produce some vocabulary signal. The D2 classifier accuracy quantifies
+this signal for transparency, but gating on it would penalize the generator
+for correctly implementing distinct regimes.
 
 Feature importances from the four-way D2 classifier are reported to
 identify which specific vocabulary patterns drive regime separation,
@@ -526,10 +594,12 @@ informing future generator refinements.
 
 ---
 
-**Filed by:** Automated Phase A build
+**Filed by:** Automated Phase A.2 build
 **Governance note:** This amendment documents pre-specified design decisions
 for T2 v3. The acceptance criteria (sections 2-3) are specified before any
 v3 items exist. The evaluator corrections (section 1) are applied to the
-existing v2 data to establish accurate baselines. Section 7 was added as a
-pre-registered gate rule for v3.2, frozen before any v3.2 generation or
-evaluation.
+existing v2 data to establish accurate baselines. Section 7 records the v3.2
+pre-registered construction decision and gate rules, revised to specify
+permutation-based exact-unigram-multiset construction (superseding the
+earlier substitution-based approach committed at `e19b452`). All rules are
+frozen before any v3.2 generation or evaluation.
