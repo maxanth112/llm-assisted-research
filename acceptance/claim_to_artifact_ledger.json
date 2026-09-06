@@ -1,0 +1,223 @@
+{
+  "rounds": [
+    {
+      "round": "v1",
+      "artifact": "v3_2_counterfactual_pairs_review.md",
+      "artifact_sha256": "b5ad39f76fc4cb8118ff73b0aed68ba1e2c4064044ed3b75abe9d5d2c06e0743",
+      "artifact_lines": 567,
+      "claims_vs_actuals": [
+        {
+          "claim": "Contains full serialized prompt texts for all 8 pairs",
+          "actual": "File contains truth tables and summaries but NOT complete serialized prompts. No fenced code blocks with preamble+narrative+question+options+evidence.",
+          "verdict": "OVERSTATED"
+        },
+        {
+          "claim": "Independent oracle verifies labels",
+          "actual": "Both symbolic_label() and exhaustive_viability_oracle() in the generator consume the same hidden assignment arrays (criterion_a_assignment, criterion_b_assignment). No text-derived oracle exists in v1.",
+          "verdict": "OVERSTATED \u2014 oracle is not independent"
+        },
+        {
+          "claim": "B1-B7 baselines computed",
+          "actual": "No fitted classifiers exist. Prior doc contains expected-value prose, not empirical results.",
+          "verdict": "OVERSTATED \u2014 baselines were not actually fitted"
+        },
+        {
+          "claim": "DECOY name-frequency balanced",
+          "actual": "DECOY construction gave guilty suspect 4 mentions vs 3 for innocents (extra corroboration).",
+          "verdict": "FALSE \u2014 4-vs-3 imbalance existed"
+        },
+        {
+          "claim": "Name-length strata correct",
+          "actual": "Hand-written strata had incorrect character-length groupings.",
+          "verdict": "INCORRECT \u2014 lengths were hand-coded with errors"
+        }
+      ]
+    },
+    {
+      "round": "v2",
+      "artifact": "v3_2_counterfactual_pairs_review_v2.md",
+      "artifact_sha256": "a589a3e82a29b9f5178a4cb0a1708849f32a7042cf1970196f90b3aed25ab10a",
+      "artifact_lines": 563,
+      "claims_vs_actuals": [
+        {
+          "claim": "Full serialized prompts for ALL 8 pairs",
+          "actual": "File contains 2 CLEAN member prompts and 2 INSUFFICIENT member prompts in fenced code blocks. Only 2 of 8 pairs have full prompts; the rest are summarized in a table.",
+          "verdict": "PARTIALLY_IMPLEMENTED"
+        },
+        {
+          "claim": "Text-derived oracle is independent (parses from text only)",
+          "actual": "verify_v322.py contains a text_derived_oracle() function that parses Level-2/Level-1 and flagged/cleared from the serialized prompt string. It does not import or access assignment arrays. However: (a) it only handles CLEAN/INSUFFICIENT/DECOY, not CONFLICT; (b) it is embedded in the verification script, not a standalone tested module; (c) no AST-level independence enforcement exists.",
+          "verdict": "PARTIALLY_IMPLEMENTED \u2014 CONFLICT oracle missing, no independence test"
+        },
+        {
+          "claim": "B1-B7 baselines computed empirically",
+          "actual": "B3 (token count), B4 (evidence slot length), B5 (name frequency) have accuracy numbers. B1 (word unigram TF-IDF) and B2 (char n-gram) are prose descriptions, not fitted classifiers. B6 (polarity) is a prose note. B7 (combined) shows partial vote tallies for 3 items, not a fitted classifier with accuracy. No classifier was trained. No LOFO evaluation.",
+          "verdict": "OVERSTATED \u2014 only B3/B4/B5 had simple heuristic accuracy; B1/B2/B6/B7 were prose"
+        },
+        {
+          "claim": "Inference amendment uses 95th percentile (one-sided)",
+          "actual": "AMENDMENT_v3_2_inference_rule_v2.md correctly specifies 95th percentile. However, the pseudocode's lofo_balanced_accuracy() reuses precomputed predictions rather than retraining per fold.",
+          "verdict": "PARTIALLY_IMPLEMENTED \u2014 correct percentile, but LOFO pseudocode is not genuine retraining"
+        },
+        {
+          "claim": "32-family taxonomy with genuinely distinct families",
+          "actual": "TAXONOMY_32_families.md lists 32 families across 8 categories x 4 variants. However, all 32 share the same conjunction mechanism, same 'Level-2/Level-1' + 'flagged/cleared' binary evidence pattern, and same sentence structure. Variants within a category differ only in noun substitutions (e.g., 'vault access' vs 'evidence handling'). These are surface-level template variations, not genuinely distinct structural families.",
+          "verdict": "OVERSTATED \u2014 32 surface variants of 1 structural pattern, not 32 independent structures"
+        },
+        {
+          "claim": "Option-length asymmetry does not affect leakage",
+          "actual": "Review v2 acknowledges abstention is 4-7 chars longer but dismisses it as 'does not leak suspect identity.' This understates the issue: within INSUFFICIENT, an option-length baseline can achieve perfect accuracy (always pick longest = abstention = gold). This was not quantified or formally addressed.",
+          "verdict": "UNDERSTATED \u2014 option-length baseline can achieve 100% on INSUFFICIENT"
+        }
+      ]
+    },
+    {
+      "round": "v2_supplementary",
+      "artifact": "verify_v322.py",
+      "artifact_sha256": "a9551a2260036392df12c038caeec106f048595057c3d59d730c64f9e5b400d2",
+      "claims_vs_actuals": [
+        {
+          "claim": "Verification script prints full prompts for all 8 pairs",
+          "actual": "Script contains 1 prompt output block(s). The STEP 4 code block only prints prompts for pair_ids[0] (the first pair).",
+          "verdict": "OVERSTATED"
+        },
+        {
+          "claim": "Text-derived oracle tested on all regimes",
+          "actual": "Oracle tested on CLEAN, INSUFFICIENT, DECOY. CONFLICT items produce PARSE_FAIL because CONFLICT uses source-precedence (not conjunction), and the oracle only parses Level-2/Level-1 + flagged/cleared.",
+          "verdict": "PARTIALLY_IMPLEMENTED \u2014 CONFLICT regime not covered"
+        }
+      ]
+    },
+    {
+      "round": "v3",
+      "artifact": "acceptance_manifest_v3.json",
+      "artifact_location": "preserved_prior_rounds/v3_round/acceptance_manifest_v3.json",
+      "claims_vs_actuals": [
+        {
+          "claim": "Archive is self-contained and runnable from empty directory",
+          "actual": "Archive omitted datasets/t2_generator/generator_v3_2.py, its base-generator dependencies, harness/credential_guard.py, and guard tests. Running python acceptance/run_acceptance.py from an empty directory fails with ModuleNotFoundError: datasets.",
+          "verdict": "FALSE"
+        },
+        {
+          "claim": "Manifest paths are valid and files exist",
+          "actual": "Manifest referenced absolute /home/user/... paths and listed omitted files as existing.",
+          "verdict": "FALSE"
+        },
+        {
+          "claim": "B3 (token_length) balanced accuracy of 0.0 passes leakage gate",
+          "actual": "A BA of 0.0 means predictions are perfectly REVERSED. This is COMPLETE SEPARATION (maximal leakage). The gate used raw BA <= 0.55, so 0.0 passed. Serious orientation bug.",
+          "verdict": "FALSE"
+        },
+        {
+          "claim": "B7 (combined) balanced accuracy of 0.0 passes leakage gate",
+          "actual": "Same defect as B3. Perfect reversal treated as passing.",
+          "verdict": "FALSE"
+        },
+        {
+          "claim": "Oracle independence test was frozen before acceptance run",
+          "actual": "The AST-based test was edited mid-run (naive string-match -> ast.parse) and then the run was called verified.",
+          "verdict": "FALSE"
+        },
+        {
+          "claim": "Baselines use context-only features (options stripped)",
+          "actual": "Baselines extracted features from full serialized prompt INCLUDING answer options.",
+          "verdict": "DEFICIENT"
+        },
+        {
+          "claim": "Fold provenance recorded with train/test IDs",
+          "actual": "A6 only checked nonempty records. A7 only checked item.family == held_out_family. No train IDs, test IDs, feature dims, or hyperparameters recorded.",
+          "verdict": "OVERSTATED"
+        }
+      ]
+    },
+    {
+      "round": "v4",
+      "artifact": "acceptance_manifest_v4.json",
+      "artifact_location": "acceptance/acceptance_manifest.json",
+      "prior_claim": "All seven v3 corrections implemented and verified; 12/12 Class-A gates pass; 4/4 SANITY gates pass; exit code 0",
+      "reviewer_findings": "Human reviewer independently reproduced acceptance_portable.zip from an empty directory: install succeeded, run_acceptance.py exited 0, portability confirmed. But three remaining defects found.",
+      "claims_vs_actuals": [
+        {
+          "claim": "Answer-choice evaluation implemented (Correction 3b)",
+          "actual": "run_acceptance.py printed 'Answer-choice evaluation placeholder (requires multi-class baseline implementation)' and exited 0. No 4-class baselines were fitted. No per-regime accuracy table produced. No answer_choice_predictions.json generated. The fail-closed gate was absent — the placeholder passed silently.",
+          "verdict": "FALSE — placeholder, not implementation"
+        },
+        {
+          "claim": "Pair members share option arrays and option-length shortcut removed",
+          "actual": "Reviewer confirmed: all 8 CLEAN/INSUFFICIENT pairs had DIFFERENT hypothesis/option arrays across members. Abstention was always the longest option. A longest-option baseline scored 100% on INSUFFICIENT and 0% on CLEAN/DECOY/CONFLICT (aggregate 25% concealed per-regime shortcut).",
+          "verdict": "FALSE — neither shared options nor length-matching was implemented"
+        },
+        {
+          "claim": "CONFLICT oracle handles all precedence edge cases",
+          "actual": "Inserting 'witness testimony takes precedence over the official log' (contradicting the existing log-precedence rule) still returned OK and picked the automated-log suspect. The oracle detected MISSING precedence rules but not AMBIGUOUS or CONTRADICTORY ones.",
+          "verdict": "DEFICIENT — absence detection only, no contradiction/ambiguity detection"
+        }
+      ]
+    },
+    {
+      "round": "v5",
+      "artifact": "acceptance_manifest.json",
+      "artifact_location": "acceptance/acceptance_manifest.json",
+      "generator_version": "3.2.4",
+      "prior_claim": "v3.2.3 defects 1-3 fixed; all gates pass; exit code 0",
+      "reviewer_findings": "Human reviewer confirmed v3.2.3 passed from empty dir. Five structural issues required correction.",
+      "changes": [
+        {
+          "item": "1",
+          "description": "Tie-aware expected accuracy for longest-option baseline",
+          "implementation": "answer_choice_longest_option() computes tied_candidate_set, expected_credit. compute_answer_choice_accuracy() handles both 'correct' and 'expected_credit' schemas.",
+          "verification": "A18 gate PASS, test_longest_option_tie_aware_expected_credit PASS"
+        },
+        {
+          "item": "2a",
+          "description": "Gold-position 2/2/2/2 balance per regime",
+          "implementation": "_solve_pair_positions() constraint-satisfaction solver for CLEAN/INSUF. _joint_balanced_positions() for DECOY/CONFLICT.",
+          "verification": "A14 gate PASS, test_gold_position_balance_per_regime PASS"
+        },
+        {
+          "item": "2b",
+          "description": "Abstention-position 2/2/2/2 balance per regime",
+          "implementation": "Same solver as 2a.",
+          "verification": "A15 gate PASS, test_abstention_position_balance_per_regime PASS"
+        },
+        {
+          "item": "2c",
+          "description": "Token-level length equality (char AND token)",
+          "implementation": "_token_aware_pad() + _length_match_options() using tiktoken 0.14.0 cl100k_base.",
+          "verification": "A16 gate PASS, test_all_options_same_token_length_within_item PASS"
+        },
+        {
+          "item": "2d",
+          "description": "Byte-identical option arrays in pairs",
+          "implementation": "_build_shared_option_array() with explicit positions.",
+          "verification": "A17 gate PASS, test_paired_members_have_identical_option_arrays PASS"
+        },
+        {
+          "item": "3",
+          "description": "Position-only baseline (all 4 positions)",
+          "implementation": "answer_choice_fixed_position() for positions 0-3.",
+          "verification": "A18 gate PASS (exact 0.25 per regime), test_position_baselines_exactly_025_per_regime PASS"
+        },
+        {
+          "item": "4",
+          "description": "Corpus-scale tolerance near 0.25",
+          "implementation": "CORPUS_SCALE_AC_TOLERANCE = 0.30, documented as one-sided 95% UCB at N=500.",
+          "verification": "test_corpus_scale_tolerance_not_050 PASS"
+        },
+        {
+          "item": "5",
+          "description": "Runner fail-closed + ledger + tests + archive",
+          "implementation": "18 Class-A gates, 4 SANITY gates, tiktoken in requirements.txt, 75 total pytest tests.",
+          "verification": "18/18 A PASS, 4/4 SANITY PASS, 75/75 pytest PASS"
+        }
+      ],
+      "tokenizer": "tiktoken 0.14.0, cl100k_base",
+      "gate_summary": {
+        "class_a": "18/18 PASS",
+        "sanity": "4/4 PASS",
+        "class_b": "illustrative (N=16)",
+        "exit_code": 0
+      }
+    }
+  ]
+}

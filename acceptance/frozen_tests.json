@@ -1,0 +1,12 @@
+{
+  "frozen_at": "2026-09-06T21:36:33Z",
+  "files": {
+    "acceptance/run_acceptance.py": "d44b8e02915ce4dbd1c761d573b0ecadb77134325c8fcf26dbb663141cfa244a",
+    "acceptance/test_acceptance.py": "a67e66d70d79df55a43aeacc39f35ec9fc7b4942f0185605e07692e76882e769",
+    "acceptance/oracles.py": "d58e8f419c3580b9a9e4a2b7e38078b9453b88aba1ea8b9349139eee775b055c",
+    "acceptance/baselines.py": "4bbf0a0473b81e19d3bd943c506ea7e36594e3f05904fc5ae35e6d1d4ce27157",
+    "acceptance/bootstrap.py": "4336ba27ab77a749b0de56db0c17fab20d3dcec05fad231d8baba16f3d5352f2",
+    "tests/test_credential_guard.py": "9fb14515ee2e6358a8a3080ee1e79c7a86569108b1560b7a5f6bbac6c6bfd268",
+    "harness/credential_guard.py": "2e40dcbb96d76570aaa2d0fa2ed369d314c7015047bf56f7f1374130db680920"
+  }
+}
