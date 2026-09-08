@@ -55,6 +55,8 @@ from acceptance.baselines import (
     extract_b4_features, extract_b5_features, extract_b6_features,
     extract_context_only_text,
     run_answer_choice_baselines, compute_answer_choice_accuracy,
+    compute_macro_avg_accuracy, grouped_family_bootstrap_macro_avg,
+    _prediction_credit, REGIMES,
     CORPUS_SCALE_AC_TOLERANCE,
 )
 import tiktoken
@@ -837,9 +839,10 @@ class TestAnswerChoiceEvaluation:
             )
 
     def test_no_per_regime_shortcut_above_tolerance(self, generated_items):
-        """No answer-choice baseline exceeds CORPUS_SCALE_AC_TOLERANCE in any
-        single regime, EXCEPT structurally guaranteed matches (always-abstain
-        on INSUFFICIENT where gold IS abstention by definition)."""
+        """Per-regime diagnostic: no baseline exceeds 0.30 in any non-exempt
+        regime.  This is a DIAGNOSTIC (non-gating) check; the primary gate
+        is the macro-avg UCB.  always-abstain on INSUFFICIENT (1.00) is
+        structurally expected and acceptable under macro-avg semantics."""
         ac_results = run_answer_choice_baselines(generated_items)
         structural_exemptions = {
             ("ac_always_abstain", "INSUFFICIENT"),
@@ -893,3 +896,248 @@ class TestAnswerChoiceEvaluation:
             f"CORPUS_SCALE_AC_TOLERANCE={CORPUS_SCALE_AC_TOLERANCE} < 0.25 "
             f"(below chance — too strict)"
         )
+
+
+# ====================================================================
+# v3.2.5 A13 REDEFINITION REGRESSION TESTS
+# ====================================================================
+# These tests verify the new A13 macro-avg UCB gate semantics using
+# synthetic / injected accuracy inputs.
+
+def _make_synthetic_predictions(per_regime_correct, families=None):
+    """Build synthetic answer-choice prediction records.
+
+    per_regime_correct: dict mapping regime -> list of (family, correct_bool).
+    Returns list of prediction dicts with 'regime', 'family', 'correct',
+    'item_id' fields.
+    """
+    preds = []
+    idx = 0
+    for regime, entries in per_regime_correct.items():
+        for fam, correct in entries:
+            preds.append({
+                "item_id": f"synth_{idx:04d}",
+                "regime": regime,
+                "family": fam if families is None else fam,
+                "correct": correct,
+                "baseline": "synth",
+            })
+            idx += 1
+    return preds
+
+
+class TestA13MacroAvgUCB:
+    """v3.2.5 regression tests for the macro-avg UCB gate."""
+
+    def test_macro_avg_unequal_regime_sizes(self):
+        """(a) Unequal regime sizes are weighted equally (macro, not pooled).
+
+        Construct predictions where CLEAN has 10 items (all correct) and
+        INSUFFICIENT/DECOY/CONFLICT have 2 items each (all wrong).
+        Pooled accuracy = 10/16 = 0.625.
+        Macro-avg = (1.0 + 0.0 + 0.0 + 0.0)/4 = 0.25.
+        """
+        preds = _make_synthetic_predictions({
+            "CLEAN": [("fam_a", True)] * 5 + [("fam_b", True)] * 5,
+            "INSUFFICIENT": [("fam_a", False)] + [("fam_b", False)],
+            "DECOY": [("fam_a", False)] + [("fam_b", False)],
+            "CONFLICT": [("fam_a", False)] + [("fam_b", False)],
+        })
+        result = compute_macro_avg_accuracy(preds)
+        assert abs(result["macro_avg"] - 0.25) < 1e-9, (
+            f"macro_avg={result['macro_avg']}, expected 0.25 (not pooled 0.625)")
+
+    def test_point_below_030_fails_when_ucb_exceeds(self):
+        """(b) Point estimate below 0.30 FAILS when UCB > 0.30.
+
+        fam_a: correct in CLEAN and INSUFFICIENT.  fam_b: wrong everywhere.
+        Per-regime: CLEAN=0.5, INSUF=0.5, DECOY=0, CONFLICT=0.
+        Point macro = (0.5 + 0.5 + 0 + 0)/4 = 0.25 < 0.30.
+        When bootstrap draws fam_a twice, macro jumps to 0.50,
+        pushing UCB well above 0.30.
+        """
+        preds = _make_synthetic_predictions({
+            "CLEAN": [("fam_a", True), ("fam_b", False)],
+            "INSUFFICIENT": [("fam_a", True), ("fam_b", False)],
+            "DECOY": [("fam_a", False), ("fam_b", False)],
+            "CONFLICT": [("fam_a", False), ("fam_b", False)],
+        })
+        result = compute_macro_avg_accuracy(preds)
+        assert result["macro_avg"] < 0.30, (
+            f"precondition: point={result['macro_avg']:.4f} must be < 0.30")
+
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=10000, seed=42)
+        assert boot["upper_95"] > 0.30, (
+            f"Expected UCB > 0.30 despite point={boot['point_macro_avg']:.4f}, "
+            f"got UCB={boot['upper_95']:.4f}")
+        assert not boot["gate_passes"], "Gate should FAIL when UCB > 0.30"
+
+    def test_ucb_at_or_below_030_passes(self):
+        """(c) Point estimate whose UCB <= 0.30 PASSES.
+
+        Use many families with many items each, all scoring exactly 0.25.
+        With enough data, the grouped bootstrap UCB converges close to
+        the point estimate.
+        """
+        families = [f"fam_{i}" for i in range(20)]
+        # 20 items per family per regime (4 correct + 16 wrong = 0.20 each;
+        # but we want exactly 0.25, so 5 correct + 15 wrong per family)
+        preds = _make_synthetic_predictions({
+            regime: [
+                entry
+                for fam in families
+                for entry in [(fam, True)] * 5 + [(fam, False)] * 15
+            ]
+            for regime in REGIMES
+        })
+        result = compute_macro_avg_accuracy(preds)
+        # Each regime: 100/400 correct = 0.25
+        assert abs(result["macro_avg"] - 0.25) < 1e-9
+
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=10000, seed=42)
+        assert boot["upper_95"] <= 0.30, (
+            f"UCB={boot['upper_95']:.4f} > 0.30 with point=0.25 and "
+            f"20 families x 20 items each")
+        assert boot["gate_passes"], "Gate should PASS when UCB <= 0.30"
+
+    def test_overall_above_030_fails(self):
+        """(d) Overall accuracy above 0.30 FAILS.
+
+        Make every prediction correct: macro-avg = 1.0, UCB >= 1.0.
+        """
+        preds = _make_synthetic_predictions({
+            regime: [("fam_a", True)] * 4 + [("fam_b", True)] * 4
+            for regime in REGIMES
+        })
+        result = compute_macro_avg_accuracy(preds)
+        assert result["macro_avg"] > 0.30
+
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=10000, seed=42)
+        assert boot["upper_95"] > 0.30
+        assert not boot["gate_passes"], "Gate should FAIL when accuracy=1.0"
+
+    def test_always_abstain_025_no_exemption(self, generated_items):
+        """(e) always-abstain produces macro-avg 0.25 WITHOUT any exemption.
+
+        The always-abstain baseline scores 1.00 in INSUFFICIENT and 0.00
+        elsewhere. Macro-avg = (0+1+0+0)/4 = 0.25.  No structural_exemptions
+        dict needed.
+        """
+        ac_results = run_answer_choice_baselines(generated_items)
+        preds = ac_results["ac_always_abstain"]
+
+        result = compute_macro_avg_accuracy(preds)
+        assert abs(result["macro_avg"] - 0.25) < 1e-9, (
+            f"always-abstain macro_avg={result['macro_avg']}, expected 0.25")
+
+        # Confirm per-regime pattern
+        assert abs(result["per_regime"]["INSUFFICIENT"]["accuracy"] - 1.0) < 1e-9
+        for regime in ["CLEAN", "DECOY", "CONFLICT"]:
+            assert abs(result["per_regime"][regime]["accuracy"] - 0.0) < 1e-9
+
+        # UCB should also pass without exemption
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=10000, seed=42)
+        assert boot["gate_passes"], (
+            f"always-abstain should pass the UCB gate without exemption, "
+            f"but UCB={boot['upper_95']:.4f}")
+
+    def test_per_regime_diagnostic_not_gating(self):
+        """(f) Per-regime results are reported but do NOT independently gate.
+
+        Construct a baseline where one regime has accuracy 0.50 (above 0.30)
+        but the macro-average is 0.25 and UCB <= 0.30. The gate should PASS
+        because per-regime values are diagnostic only.
+        """
+        # 20 families, 20 items per family per regime.
+        # CLEAN: 10/20 correct per family = 0.50 (above 0.30).
+        # INSUFFICIENT: 0/20 correct per family = 0.00.
+        # DECOY: 5/20 = 0.25. CONFLICT: 5/20 = 0.25.
+        # Macro = (0.50 + 0.00 + 0.25 + 0.25)/4 = 0.25.
+        families = [f"fam_{i}" for i in range(20)]
+        preds = _make_synthetic_predictions({
+            "CLEAN": [
+                entry
+                for fam in families
+                for entry in [(fam, True)] * 10 + [(fam, False)] * 10
+            ],
+            "INSUFFICIENT": [
+                entry
+                for fam in families
+                for entry in [(fam, False)] * 20
+            ],
+            "DECOY": [
+                entry
+                for fam in families
+                for entry in [(fam, True)] * 5 + [(fam, False)] * 15
+            ],
+            "CONFLICT": [
+                entry
+                for fam in families
+                for entry in [(fam, True)] * 5 + [(fam, False)] * 15
+            ],
+        })
+        result = compute_macro_avg_accuracy(preds)
+        # CLEAN = 0.5, INSUFFICIENT = 0.0, DECOY = 0.25, CONFLICT = 0.25
+        assert result["per_regime"]["CLEAN"]["accuracy"] > 0.30, \
+            "precondition: CLEAN accuracy must exceed per-regime 0.30 threshold"
+        assert abs(result["macro_avg"] - 0.25) < 1e-9, \
+            "precondition: macro-avg must be 0.25"
+
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=10000, seed=42)
+        # Gate should pass because macro-avg UCB is checked, not per-regime
+        assert boot["gate_passes"], (
+            f"Gate should PASS (macro-avg UCB={boot['upper_95']:.4f} <= 0.30) "
+            f"even though CLEAN={result['per_regime']['CLEAN']['accuracy']:.2f} > 0.30 — "
+            f"per-regime is diagnostic only")
+
+    def test_grouped_bootstrap_uses_family_resampling(self):
+        """(g) Grouped resampling uses template families, not item-level.
+
+        Verify that grouped_family_bootstrap_macro_avg resamples at the
+        family level by showing it produces DIFFERENT bootstrap variance
+        than a hypothetical item-level bootstrap would.
+
+        With 1 family and 8 items, family-level resampling draws the SAME
+        family every time (no variance). With item-level, there'd be
+        variance. So if std ≈ 0 with 1 family, the function is resampling
+        families.
+        """
+        # 1 family: all items have the same family
+        preds = _make_synthetic_predictions({
+            "CLEAN": [("single_fam", True), ("single_fam", False)],
+            "INSUFFICIENT": [("single_fam", True), ("single_fam", False)],
+            "DECOY": [("single_fam", True), ("single_fam", False)],
+            "CONFLICT": [("single_fam", True), ("single_fam", False)],
+        })
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=5000, seed=42)
+        assert boot["n_families"] == 1, f"Expected 1 family, got {boot['n_families']}"
+
+        # With 1 family, Stage 1 always draws the same family.
+        # Stage 2 resamples items WITHIN that family, so there IS some
+        # item-level variance. But we can verify the function reports
+        # n_families=1 and USES grouped resampling by checking that
+        # the resampling unit is recorded.
+
+        # More definitive test: 2 families with OPPOSITE results.
+        # Family-level resampling produces {0.25, 0.75, 0.25, 0.75, 0.50}
+        # as possible macro-averages.  Item-level would produce a smoother
+        # distribution.
+        preds_2fam = _make_synthetic_predictions({
+            regime: [("fam_all_correct", True)] * 4 + [("fam_all_wrong", False)] * 4
+            for regime in REGIMES
+        })
+        boot_2fam = grouped_family_bootstrap_macro_avg(
+            preds_2fam, n_bootstrap=10000, seed=42)
+        assert boot_2fam["n_families"] == 2
+
+        # With 2 families and family-level resampling, the bootstrap
+        # distribution should be TRIMODAL (both correct-fam drawn,
+        # both wrong-fam drawn, or one of each). The possible macro-averages
+        # are 1.0, 0.0, and ~0.5. Check that the distribution has high std
+        # (it should be ~0.35 for trimodal, vs ~0.06 for item-level with
+        # 32 items).
+        assert boot_2fam["bootstrap_std"] > 0.15, (
+            f"Expected high bootstrap std with 2 polar families "
+            f"(family-level resampling), got {boot_2fam['bootstrap_std']:.4f}. "
+            f"This suggests item-level resampling was used instead of "
+            f"grouped family resampling.")

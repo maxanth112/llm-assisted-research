@@ -218,6 +218,75 @@
         "class_b": "illustrative (N=16)",
         "exit_code": 0
       }
+    },
+    {
+      "round": "v6",
+      "artifact": "acceptance_manifest.json",
+      "artifact_location": "acceptance/acceptance_manifest.json",
+      "generator_version": "3.2.5",
+      "prior_claim": "v3.2.4 all gates pass; A13 applied 0.30 tolerance per-regime to raw point estimate with hardcoded always-abstain/INSUFFICIENT exemption",
+      "reviewer_findings": "The v3.2.4 A13 gate (1) compared a raw point estimate (not a UCB) against 0.30, (2) applied the threshold per-regime rather than to an overall statistic, and (3) required a hardcoded structural exemption for always-abstain on INSUFFICIENT. These were identified as semantic issues warranting correction.",
+      "changes": [
+        {
+          "item": "1",
+          "description": "A13 primary statistic: macro-average overall accuracy",
+          "implementation": "compute_macro_avg_accuracy() in baselines.py computes mean of 4 per-regime accuracies. Explicit macro-averaging ensures each regime contributes equally regardless of per-regime N.",
+          "verification": "test_macro_avg_unequal_regime_sizes PASS"
+        },
+        {
+          "item": "2",
+          "description": "Structural exemptions removed",
+          "implementation": "No structural_exemptions dict in A13 gate. always-abstain scores macro-avg=0.25 (chance) without any carve-out: (0+1+0+0)/4 = 0.25.",
+          "verification": "test_always_abstain_025_no_exemption PASS"
+        },
+        {
+          "item": "3",
+          "description": "One-sided 95% UCB at runtime via grouped bootstrap",
+          "implementation": "grouped_family_bootstrap_macro_avg() in baselines.py. 10,000 replicates. UCB = 95th percentile of bootstrap distribution. Gate rule: UCB <= 0.30.",
+          "verification": "test_point_below_030_fails_when_ucb_exceeds PASS, test_ucb_at_or_below_030_passes PASS"
+        },
+        {
+          "item": "4",
+          "description": "Grouped resampling at template-family level",
+          "implementation": "Resampling unit: template family. Stage 1: draw F families with replacement. Stage 2: within each drawn family, within each regime, resample items with replacement. Macro-average recomputed per replicate. Mirrors two-stage protocol in acceptance/bootstrap.py.",
+          "verification": "test_grouped_bootstrap_uses_family_resampling PASS"
+        },
+        {
+          "item": "5",
+          "description": "Per-regime accuracies diagnostic-only",
+          "implementation": "Per-regime accuracies reported in runner output and flagged if conspicuous (>0.80), but do NOT independently determine the A13 gate.",
+          "verification": "test_per_regime_diagnostic_not_gating PASS"
+        },
+        {
+          "item": "6",
+          "description": "7 frozen regression tests",
+          "implementation": "TestA13MacroAvgUCB class: (a) macro-avg not pooled, (b) point<0.30 + UCB>0.30 => FAIL, (c) UCB<=0.30 => PASS, (d) accuracy>0.30 => FAIL, (e) always-abstain 0.25 no exemption, (f) per-regime non-gating, (g) grouped family resampling verified.",
+          "verification": "7/7 PASS"
+        },
+        {
+          "item": "7",
+          "description": "Runner fail-closed + re-frozen hashes",
+          "implementation": "Exits nonzero if bootstrap or macro-avg computation fails. Frozen test hashes updated. 59 acceptance tests + 23 credential guard tests = 82 total.",
+          "verification": "82/82 pytest PASS"
+        }
+      ],
+      "a13_definition": {
+        "statistic": "macro-average accuracy = mean(CLEAN_acc, INSUF_acc, DECOY_acc, CONFLICT_acc)",
+        "gate_rule_corpus_scale": "one-sided 95% UCB (grouped family bootstrap, 10,000 replicates) <= 0.30 (when N >= 30/regime)",
+        "gate_rule_sample_scale": "completeness + point estimate <= 0.30 (when N < 30/regime; UCB informational only)",
+        "min_n_per_regime_for_ucb": 30,
+        "resampling_unit": "template family",
+        "ucb_derivation": "95th percentile of bootstrap distribution of macro-average accuracy",
+        "sample_size_assumption": "N=500/regime -> 2,000 total for corpus-scale validation",
+        "tolerance_derivation": "one-sided 95% normal-approx UCB at N=500, chance=0.25 ~ 0.282, rounded to 0.30",
+        "structural_exemptions": "none; always-abstain yields macro-avg=0.25 without any carve-out"
+      },
+      "gate_summary": {
+        "class_a": "18/18 PASS",
+        "sanity": "4/4 PASS",
+        "class_b": "illustrative (N=16)",
+        "exit_code": 0
+      }
     }
   ]
 }

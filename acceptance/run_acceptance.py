@@ -50,7 +50,8 @@ from acceptance.oracles import conjunction_oracle, conflict_oracle, run_oracle
 from acceptance.baselines import (
     run_all_baselines, compute_balanced_accuracy,
     run_answer_choice_baselines, compute_answer_choice_accuracy,
-    CORPUS_SCALE_AC_TOLERANCE,
+    compute_macro_avg_accuracy, grouped_family_bootstrap_macro_avg,
+    CORPUS_SCALE_AC_TOLERANCE, CORPUS_SCALE_MIN_N_PER_REGIME, REGIMES,
 )
 import tiktoken
 from acceptance.bootstrap import two_stage_bootstrap
@@ -518,67 +519,118 @@ def run_gates():
 
     ac_results = run_answer_choice_baselines(items)
 
-    # Print accuracy table
-    # ITEM 4: AC_TOLERANCE for 8-item/regime sample gates uses exact
-    # deterministic checks (see A14-A18 below).  The old 0.50 value was
-    # an interim placeholder that is too permissive for a 4-class task at
-    # chance=0.25.  CORPUS_SCALE_AC_TOLERANCE (0.30) will activate at
-    # >=500/regime.  Neither is used for the structural gates below.
+    # Print accuracy table with macro-average (v3.2.5)
     AC_TOLERANCE = CORPUS_SCALE_AC_TOLERANCE
-    print(f"\n    Answer-choice accuracy (chance=0.25, corpus-scale tolerance={AC_TOLERANCE}):")
-    print(f"    {'Baseline':<25} {'Overall':>8} {'CLEAN':>8} {'INSUF':>8} {'DECOY':>8} {'CONFLICT':>8}")
-    print(f"    {'-'*25} {'-'*8} {'-'*8} {'-'*8} {'-'*8} {'-'*8}")
+    print(f"\n    Answer-choice accuracy (chance=0.25, UCB ceiling={AC_TOLERANCE}):")
+    print(f"    {'Baseline':<25} {'MacroAvg':>8} {'CLEAN':>8} {'INSUF':>8} {'DECOY':>8} {'CONFLICT':>8}  {'UCB95':>8} {'Gate':>6}")
+    print(f"    {'-'*25} {'-'*8} {'-'*8} {'-'*8} {'-'*8} {'-'*8}  {'-'*8} {'-'*6}")
 
     ac_accuracy_table = {}
+    ac_bootstrap_table = {}
     for bl_name, bl_preds in ac_results.items():
+        # Per-regime + macro-average
+        macro_result = compute_macro_avg_accuracy(bl_preds)
+        macro_avg = macro_result["macro_avg"]
+        per_regime = macro_result["per_regime"]
+
+        # Grouped bootstrap UCB
+        boot = grouped_family_bootstrap_macro_avg(bl_preds,
+                                                   n_bootstrap=10000,
+                                                   seed=SEED)
+
+        # Also compute old-style accuracy for backward compat in saved JSON
         acc = compute_answer_choice_accuracy(bl_preds, by_regime=True)
+        acc["macro_avg"] = macro_avg
         ac_accuracy_table[bl_name] = acc
-        overall = acc["overall"]
+        ac_bootstrap_table[bl_name] = boot
+
         regime_strs = []
-        for regime in ["CLEAN", "INSUFFICIENT", "DECOY", "CONFLICT"]:
-            r_acc = acc.get(regime, {}).get("accuracy", 0.0)
+        for regime in REGIMES:
+            r_acc = per_regime.get(regime, {}).get("accuracy", 0.0)
             regime_strs.append(f"{r_acc:>8.4f}")
-        print(f"    {bl_name:<25} {overall:>8.4f} {' '.join(regime_strs)}")
+        gate_str = "PASS" if boot["gate_passes"] else "FAIL"
+        print(f"    {bl_name:<25} {macro_avg:>8.4f} {' '.join(regime_strs)}  {boot['upper_95']:>8.4f} {gate_str:>6}")
+
+    # Per-regime diagnostic flags (non-gating, for human review)
+    diagnostic_flags = []
+    for bl_name, bl_preds in ac_results.items():
+        macro_result = compute_macro_avg_accuracy(bl_preds)
+        for regime in REGIMES:
+            r_acc = macro_result["per_regime"].get(regime, {}).get("accuracy", 0.0)
+            if r_acc > 0.80:
+                diagnostic_flags.append(
+                    f"    [DIAG] {bl_name}: {regime} accuracy={r_acc:.4f} "
+                    f"(conspicuous concentration — structurally expected "
+                    f"for always-abstain on INSUFFICIENT)")
+    if diagnostic_flags:
+        print("\n    Per-regime diagnostics (non-gating, for human review):")
+        for flag in diagnostic_flags:
+            print(flag)
 
     # Save answer-choice predictions
     ac_json_path = os.path.join(OUT_DIR, "answer_choice_predictions.json")
     with open(ac_json_path, "w") as f:
-        json.dump({"baselines": ac_results, "accuracy_table": ac_accuracy_table},
+        json.dump({"baselines": ac_results,
+                   "accuracy_table": ac_accuracy_table,
+                   "bootstrap_table": ac_bootstrap_table},
                   f, indent=2, default=str)
     print(f"    Saved: {ac_json_path}")
 
     # ============================================================
-    # GATE A13: Answer-choice completeness + per-regime shortcut gate
+    # GATE A13: Answer-choice macro-avg UCB gate (v3.2.5 redefinition)
     # ============================================================
-    g = Gate("A13",
-             "Answer-choice evaluation: complete coverage, no per-regime shortcut above tolerance",
-             "A")
+    # Statistic: macro-average accuracy (mean of 4 per-regime accuracies).
+    # Gate rule (corpus-scale, N >= MIN_N_PER_REGIME per regime):
+    #   one-sided 95% UCB (grouped family bootstrap) <= 0.30.
+    # At sample-scale (N < MIN_N_PER_REGIME): completeness + point
+    #   estimate check only; UCB reported as informational.
+    # Resampling unit: template family.
+    # No structural exemptions — always-abstain yields macro-avg=0.25
+    # (exactly chance) without any carve-out.
+
+    # Determine if we have corpus-scale N
+    min_regime_n = min(len(by_regime.get(r, [])) for r in REGIMES)
+    corpus_scale = min_regime_n >= CORPUS_SCALE_MIN_N_PER_REGIME
+    if corpus_scale:
+        a13_desc = ("Answer-choice evaluation: complete coverage, "
+                    f"macro-avg UCB <= {AC_TOLERANCE} (grouped bootstrap)")
+    else:
+        a13_desc = ("Answer-choice evaluation: complete coverage, "
+                    f"macro-avg point estimate check "
+                    f"(N={min_regime_n}/regime < {CORPUS_SCALE_MIN_N_PER_REGIME}; "
+                    f"UCB informational only)")
+
+    g = Gate("A13", a13_desc, "A")
     try:
         ac_violations = []
 
-        # Structural exemptions: always-abstain on INSUFFICIENT is
-        # definitionally 100% (gold IS abstention), not a shortcut.
-        structural_exemptions = {
-            ("ac_always_abstain", "INSUFFICIENT"),
-        }
-
-        # Check completeness: every baseline must cover all 32 items
+        # Check completeness: every baseline must cover all items
+        expected_ids = {it.id for it in items}
         for bl_name, bl_preds in ac_results.items():
             covered_ids = {p["item_id"] for p in bl_preds}
-            expected_ids = {it.id for it in items}
             missing = expected_ids - covered_ids
             if missing:
-                ac_violations.append(f"{bl_name}: missing {len(missing)} items: {sorted(missing)[:3]}")
+                ac_violations.append(
+                    f"{bl_name}: missing {len(missing)} items: "
+                    f"{sorted(missing)[:3]}")
 
-            # Check per-regime shortcut accuracy
-            acc = ac_accuracy_table[bl_name]
-            for regime in ["CLEAN", "INSUFFICIENT", "DECOY", "CONFLICT"]:
-                if (bl_name, regime) in structural_exemptions:
-                    continue
-                regime_acc = acc.get(regime, {}).get("accuracy", 0.0)
-                if regime_acc > AC_TOLERANCE:
+        # PRIMARY GATE: macro-avg check (no exemptions)
+        for bl_name in ac_results:
+            boot = ac_bootstrap_table[bl_name]
+            if corpus_scale:
+                # Corpus-scale: enforce UCB <= tolerance
+                if not boot["gate_passes"]:
                     ac_violations.append(
-                        f"{bl_name}: {regime} accuracy={regime_acc:.4f} > {AC_TOLERANCE}")
+                        f"{bl_name}: macro-avg UCB95={boot['upper_95']:.4f} "
+                        f"> {AC_TOLERANCE} "
+                        f"(point={boot['point_macro_avg']:.4f})")
+            else:
+                # Sample-scale: enforce point estimate <= tolerance only
+                # (UCB is not meaningful at small N — reported in table)
+                if boot["point_macro_avg"] > AC_TOLERANCE:
+                    ac_violations.append(
+                        f"{bl_name}: macro-avg point={boot['point_macro_avg']:.4f} "
+                        f"> {AC_TOLERANCE}")
 
         g.passed = len(ac_violations) == 0
         g.result = f"{len(ac_violations)} violations"

@@ -106,3 +106,40 @@ Factual record of what prior review rounds CLAIMED versus what the artifacts ACT
 - Exit code: 0
 
 ---
+
+## Round: v6 (v3.2.5 — A13 gate redefinition)
+
+**Prior claim:** "v3.2.4 all gates pass; A13 applied 0.30 tolerance per-regime to raw point estimate with hardcoded always-abstain/INSUFFICIENT exemption."
+
+**Reviewer finding:** The v3.2.4 A13 gate (1) compared a raw point estimate (not a UCB) against 0.30, (2) applied the threshold per-regime rather than to an overall statistic, and (3) required a hardcoded structural exemption for always-abstain on INSUFFICIENT. These were identified as semantic issues warranting correction.
+
+**Changes implemented in this round (v3.2.5):**
+
+| # | Item | Actual implementation | Verdict |
+|---|------|----------------------|---------|
+| 1 | A13 primary statistic: macro-average overall accuracy | `compute_macro_avg_accuracy()` in baselines.py computes mean of 4 per-regime accuracies. Explicit macro-averaging ensures each regime contributes equally regardless of per-regime N. | IMPLEMENTED — test_macro_avg_unequal_regime_sizes |
+| 2 | Structural exemptions removed | No `structural_exemptions` dict in A13 gate. always-abstain scores macro-avg=0.25 (chance) without any carve-out: (0+1+0+0)/4 = 0.25. | IMPLEMENTED — test_always_abstain_025_no_exemption |
+| 3 | One-sided 95% UCB at runtime via grouped bootstrap | `grouped_family_bootstrap_macro_avg()` in baselines.py. 10,000 replicates. UCB = 95th percentile of bootstrap distribution. Gate rule: UCB <= 0.30. | IMPLEMENTED — test_point_below_030_fails_when_ucb_exceeds, test_ucb_at_or_below_030_passes |
+| 4 | Grouped resampling at template-family level | Resampling unit: template family (the `family` field on prediction records). Stage 1: draw F families with replacement. Stage 2: within each drawn family, within each regime, resample items with replacement. Macro-average recomputed per replicate. Mirrors the two-stage protocol in acceptance/bootstrap.py. | IMPLEMENTED — test_grouped_bootstrap_uses_family_resampling |
+| 5 | Per-regime accuracies diagnostic-only | Per-regime accuracies reported in runner output and flagged if conspicuous (>0.80), but do NOT independently determine the A13 gate. | IMPLEMENTED — test_per_regime_diagnostic_not_gating |
+| 6 | 7 frozen regression tests | TestA13MacroAvgUCB class: (a) macro-avg not pooled, (b) point<0.30 + UCB>0.30 => FAIL, (c) UCB<=0.30 => PASS, (d) accuracy>0.30 => FAIL, (e) always-abstain 0.25 no exemption, (f) per-regime non-gating, (g) grouped family resampling verified. | IMPLEMENTED — 7/7 PASS |
+| 7 | Runner fail-closed + re-frozen hashes | Exits nonzero if bootstrap or macro-avg computation fails. Frozen test hashes updated. 59 acceptance tests + 23 credential guard tests = 82 total. | IMPLEMENTED |
+
+**A13 definition (v3.2.5):**
+- Statistic: macro-average accuracy = mean(CLEAN_acc, INSUF_acc, DECOY_acc, CONFLICT_acc)
+- Gate rule (corpus-scale, N >= 30/regime): one-sided 95% UCB (grouped family bootstrap, 10,000 replicates) <= 0.30
+- Gate rule (sample-scale, N < 30/regime): completeness + point estimate <= 0.30 (UCB informational only — at N=8 with 8 families, a true-chance baseline yields UCB ≈ 0.50 due to bootstrap variance alone)
+- Resampling unit: template family
+- UCB derivation: 95th percentile of bootstrap distribution of macro-average accuracy
+- Sample size assumption: N=500/regime → 2,000 total for corpus-scale validation
+- The 0.30 ceiling derives from one-sided 95% normal-approx UCB at N=500, chance=0.25 ≈ 0.282, rounded to 0.30
+- No structural exemptions; always-abstain yields macro-avg=0.25 without any carve-out
+- CORPUS_SCALE_MIN_N_PER_REGIME = 30: minimum per-regime N for UCB enforcement
+
+**Gate summary (v3.2.5):**
+- Class A: A1-A18, all 18 PASS
+- SANITY: SA1-SA4, all 4 PASS
+- Class B: illustrative (N=16), not hard-fail
+- Exit code: 0
+
+---

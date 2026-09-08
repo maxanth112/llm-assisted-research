@@ -438,25 +438,43 @@ def answer_choice_fixed_position(items, fixed_pos):
 
 
 # ============================================================
-# CORPUS-SCALE ANSWER-CHOICE TOLERANCE (ITEM 4)
+# CORPUS-SCALE ANSWER-CHOICE TOLERANCE (ITEM 4, updated v3.2.5)
 # ============================================================
-# For the eventual >=500/regime development corpus, the per-regime
-# answer-choice accuracy threshold should be near the 4-choice
-# chance level (0.25), NOT 0.50.
+# Ceiling on the one-sided 95% UPPER CONFIDENCE BOUND of the
+# macro-average answer-choice accuracy across the four regimes.
 #
-# This constant is a documented config value.  It is NOT used for
-# the current 8-item/regime illustrative gates (those use exact
-# deterministic checks instead).  It will be activated when the
-# corpus grows to statistically-meaningful size.
+# Gate A13 definition (v3.2.5):
+#   statistic = macro-avg accuracy = mean(CLEAN_acc, INSUF_acc,
+#               DECOY_acc, CONFLICT_acc)
+#   gate rule = UCB_95(statistic) <= CORPUS_SCALE_AC_TOLERANCE
+#   resampling unit = template family (grouped bootstrap)
+#   UCB = 95th percentile of the bootstrap distribution
 #
-# Value: one-sided 95% upper confidence bound at N=500,
-# chance=0.25 ≈ 0.25 + 1.645 * sqrt(0.25*0.75/500) ≈ 0.282.
-# We round up slightly to 0.30 for margin.
+# The 0.30 ceiling was derived from a one-sided 95% normal-approx
+# UCB at N=500/regime, chance=0.25:
+#   0.25 + 1.645 * sqrt(0.25*0.75/500) ≈ 0.282, rounded up to 0.30.
 #
-# 0.50 is explicitly NOT the eventual acceptance threshold — it
-# was an interim placeholder that is too permissive for a 4-class
-# task at chance=0.25.
+# The gate compares the bootstrap UCB (not the raw point estimate)
+# against 0.30.  A raw point estimate below 0.30 can still FAIL
+# if its bootstrap UCB exceeds 0.30.
+#
+# Per-regime accuracies are DIAGNOSTIC only (reported for human
+# review, but not independently gating).  always-abstain scores
+# 1.00 in INSUFFICIENT and 0.00 elsewhere, yielding macro-avg =
+# 0.25 (exactly chance) WITHOUT any special-case exemption.
+#
+# 0.50 is explicitly NOT the acceptance threshold — it was an
+# interim placeholder that is too permissive for a 4-class task
+# at chance=0.25.
 CORPUS_SCALE_AC_TOLERANCE = 0.30
+
+# Minimum per-regime N for the UCB to be statistically meaningful.
+# At N < this threshold, the grouped bootstrap UCB is dominated by
+# sampling noise (e.g., at N=8/regime with 8 families, a true-chance
+# baseline yields UCB ≈ 0.50).  Below this threshold the runner
+# reports the UCB as informational and enforces only completeness +
+# point-estimate checks.  The 0.30 ceiling was derived at N=500.
+CORPUS_SCALE_MIN_N_PER_REGIME = 30
 
 
 def run_answer_choice_baselines(items):
@@ -516,6 +534,164 @@ def compute_answer_choice_accuracy(predictions, by_regime=False):
                 "n_total": n_total,
             }
     return result
+
+
+# ================================================================
+# MACRO-AVERAGE ACCURACY + GROUPED BOOTSTRAP UCB (v3.2.5)
+# ================================================================
+#
+# The A13 corpus-scale answer-choice gate uses:
+#   Statistic: MACRO-AVERAGE overall accuracy = mean of the four
+#     per-regime accuracies (CLEAN, INSUFFICIENT, DECOY, CONFLICT).
+#     This gives each regime equal weight regardless of per-regime N.
+#   Gate rule: one-sided 95% UCB on the macro-average must be <= 0.30.
+#   Resampling unit: TEMPLATE FAMILY (grouped/clustered bootstrap),
+#     NOT individual items. Items within a family are correlated
+#     because they share narrative structure, evidence patterns,
+#     and suspect sets.
+#
+# The bootstrap reuses this project's established two-stage
+# grouped protocol (see acceptance/bootstrap.py) adapted for
+# answer-choice predictions: Stage 1 resamples families with
+# replacement; Stage 2 resamples items within each drawn family
+# with replacement, WITHIN EACH REGIME. The macro-average is
+# recomputed per bootstrap replicate.
+#
+# always-abstain's pattern (1.00 INSUFFICIENT, 0.00 elsewhere)
+# is STRUCTURALLY EXPECTED: it yields macro-avg = (0+1+0+0)/4 = 0.25,
+# which is exactly chance. No exemption is needed.
+
+REGIMES = ["CLEAN", "INSUFFICIENT", "DECOY", "CONFLICT"]
+
+
+def compute_macro_avg_accuracy(predictions):
+    """Compute macro-average accuracy: mean of the four per-regime accuracies.
+
+    This is NOT the same as pooled (micro) accuracy when regime sizes
+    differ.  Each regime contributes equally to the overall estimate.
+
+    Returns dict with 'macro_avg', per-regime accuracies, and per-regime N.
+    """
+    if not predictions:
+        return {"macro_avg": 0.0, "per_regime": {}}
+
+    by_regime = {}
+    for p in predictions:
+        by_regime.setdefault(p["regime"], []).append(p)
+
+    per_regime = {}
+    for regime in REGIMES:
+        rp = by_regime.get(regime, [])
+        if rp:
+            credit = sum(_prediction_credit(p) for p in rp)
+            per_regime[regime] = {
+                "accuracy": credit / len(rp),
+                "n_correct": credit,
+                "n_total": len(rp),
+            }
+        else:
+            per_regime[regime] = {"accuracy": 0.0, "n_correct": 0.0, "n_total": 0}
+
+    regime_accs = [per_regime[r]["accuracy"] for r in REGIMES]
+    macro_avg = sum(regime_accs) / len(REGIMES)
+
+    return {"macro_avg": macro_avg, "per_regime": per_regime}
+
+
+def grouped_family_bootstrap_macro_avg(predictions,
+                                        n_bootstrap=10000,
+                                        seed=42):
+    """Grouped (clustered) bootstrap for the macro-average accuracy.
+
+    Resampling unit: TEMPLATE FAMILY (the 'family' field on each
+    prediction record).  This mirrors the project's two-stage
+    bootstrap in acceptance/bootstrap.py, adapted for answer-choice
+    predictions across 4 regimes.
+
+    Procedure per replicate:
+      Stage 1: Draw F families with replacement from the F unique families.
+      Stage 2: For each drawn family, within each regime, resample that
+               family's items for that regime with replacement.
+      Then compute per-regime accuracy on the resampled data and take
+      the macro-average.
+
+    Returns dict with: point_macro_avg, upper_95, gate_passes, etc.
+    """
+    rng = np.random.RandomState(seed)
+
+    # Index predictions by (family, regime)
+    family_regime_items = {}  # (family, regime) -> [pred, ...]
+    families_set = set()
+    for p in predictions:
+        fam = p.get("family", "unknown")
+        regime = p["regime"]
+        families_set.add(fam)
+        family_regime_items.setdefault((fam, regime), []).append(p)
+
+    unique_families = sorted(families_set)
+    F = len(unique_families)
+
+    if F == 0:
+        return {
+            "point_macro_avg": 0.0,
+            "upper_95": 1.0,
+            "gate_passes": False,
+            "n_bootstrap": n_bootstrap,
+            "n_families": 0,
+            "n_items": 0,
+        }
+
+    # Point estimate
+    point = compute_macro_avg_accuracy(predictions)
+    point_macro = point["macro_avg"]
+
+    # Bootstrap
+    boot_macro_avgs = []
+    for _ in range(n_bootstrap):
+        # Stage 1: resample families with replacement
+        sampled_fams = rng.choice(unique_families, size=F, replace=True)
+
+        # Collect resampled predictions by regime
+        regime_credits = {r: [] for r in REGIMES}
+
+        for fam in sampled_fams:
+            # Stage 2: for each regime, resample items within this family
+            for regime in REGIMES:
+                fam_regime_preds = family_regime_items.get((fam, regime), [])
+                if not fam_regime_preds:
+                    continue
+                n = len(fam_regime_preds)
+                indices = rng.randint(0, n, size=n)
+                for idx in indices:
+                    regime_credits[regime].append(
+                        _prediction_credit(fam_regime_preds[idx]))
+
+        # Compute macro-average for this replicate
+        regime_accs = []
+        for regime in REGIMES:
+            credits = regime_credits[regime]
+            if credits:
+                regime_accs.append(sum(credits) / len(credits))
+            else:
+                regime_accs.append(0.0)
+
+        boot_macro_avgs.append(sum(regime_accs) / len(REGIMES))
+
+    boot_arr = np.array(boot_macro_avgs)
+    upper_95 = float(np.percentile(boot_arr, 95))
+
+    return {
+        "point_macro_avg": float(point_macro),
+        "upper_95": upper_95,
+        "gate_passes": upper_95 <= CORPUS_SCALE_AC_TOLERANCE,
+        "n_bootstrap": n_bootstrap,
+        "n_families": F,
+        "n_items": len(predictions),
+        "bootstrap_mean": float(np.mean(boot_arr)),
+        "bootstrap_std": float(np.std(boot_arr)),
+        "bootstrap_5th": float(np.percentile(boot_arr, 5)),
+        "bootstrap_95th": upper_95,
+    }
 
 
 # ================================================================
