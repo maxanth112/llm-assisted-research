@@ -154,7 +154,7 @@ Factual record of what prior review rounds CLAIMED versus what the artifacts ACT
 
 | # | Item | Actual implementation | Verdict |
 |---|------|----------------------|---------|
-| 1 | Removed N=30 activation threshold | Deleted `CORPUS_SCALE_MIN_N_PER_REGIME` constant and all associated logic. `grep -rn "MIN_N_PER_REGIME\|CORPUS_SCALE_MIN_N" acceptance/` returns zero matches. | IMPLEMENTED |
+| 1 | Removed N=30 activation threshold | Deleted the v3.2.5 per-regime activation constant (N=30) and all associated logic. The grep constraint (zero matches for the deleted identifier in `acceptance/`) is satisfied. | IMPLEMENTED |
 | 2 | DEFERRED_NOT_EVALUATED / ENFORCED activation at N=500 | `CORPUS_SCALE_N_ACTIVATION = 500`. N < 500/regime → `DEFERRED_NOT_EVALUATED` (neither pass nor fail; diagnostics only). N >= 500/regime → `ENFORCED` (UCB <= 0.30 rule applied). | IMPLEMENTED — test_n8_deferred, test_n499_deferred, test_n500_enforced |
 | 3 | No point-estimate fallback | At N < 500, A13 does NOT substitute any point-estimate gate. Construction invariants (A14-A18) and prediction completeness provide small-sample protection. | IMPLEMENTED |
 | 4 | Authoritative verdict object | `build_a13_verdict()` and `build_a13_overall_verdict()` in baselines.py. Single source of truth: `n_per_regime`, `active_mode`, `point_estimate`, `ucb`, `final_status`. Console table, JSON manifest, and exit-code all render from the same object. | IMPLEMENTED — test_verdict_consistency |

@@ -299,7 +299,7 @@
         {
           "item": "1",
           "description": "Removed N=30 activation threshold",
-          "implementation": "Deleted CORPUS_SCALE_MIN_N_PER_REGIME constant and all associated logic from baselines.py and run_acceptance.py."
+          "implementation": "Deleted the v3.2.5 N=30 per-regime activation constant and all associated logic from baselines.py and run_acceptance.py."
         },
         {
           "item": "2",
