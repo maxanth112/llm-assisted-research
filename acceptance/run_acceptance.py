@@ -51,7 +51,8 @@ from acceptance.baselines import (
     run_all_baselines, compute_balanced_accuracy,
     run_answer_choice_baselines, compute_answer_choice_accuracy,
     compute_macro_avg_accuracy, grouped_family_bootstrap_macro_avg,
-    CORPUS_SCALE_AC_TOLERANCE, CORPUS_SCALE_MIN_N_PER_REGIME, REGIMES,
+    build_a13_verdict, build_a13_overall_verdict,
+    CORPUS_SCALE_AC_TOLERANCE, CORPUS_SCALE_N_ACTIVATION, REGIMES,
 )
 import tiktoken
 from acceptance.bootstrap import two_stage_bootstrap
@@ -519,44 +520,53 @@ def run_gates():
 
     ac_results = run_answer_choice_baselines(items)
 
-    # Print accuracy table with macro-average (v3.2.5)
+    # Compute per-baseline verdicts via authoritative verdict objects (v3.2.6)
     AC_TOLERANCE = CORPUS_SCALE_AC_TOLERANCE
-    print(f"\n    Answer-choice accuracy (chance=0.25, UCB ceiling={AC_TOLERANCE}):")
-    print(f"    {'Baseline':<25} {'MacroAvg':>8} {'CLEAN':>8} {'INSUF':>8} {'DECOY':>8} {'CONFLICT':>8}  {'UCB95':>8} {'Gate':>6}")
-    print(f"    {'-'*25} {'-'*8} {'-'*8} {'-'*8} {'-'*8} {'-'*8}  {'-'*8} {'-'*6}")
+    min_regime_n = min(len(by_regime.get(r, [])) for r in REGIMES)
 
     ac_accuracy_table = {}
     ac_bootstrap_table = {}
+    ac_verdicts = {}  # baseline_name -> authoritative verdict dict
     for bl_name, bl_preds in ac_results.items():
-        # Per-regime + macro-average
         macro_result = compute_macro_avg_accuracy(bl_preds)
         macro_avg = macro_result["macro_avg"]
         per_regime = macro_result["per_regime"]
-
-        # Grouped bootstrap UCB
         boot = grouped_family_bootstrap_macro_avg(bl_preds,
                                                    n_bootstrap=10000,
                                                    seed=SEED)
-
-        # Also compute old-style accuracy for backward compat in saved JSON
         acc = compute_answer_choice_accuracy(bl_preds, by_regime=True)
         acc["macro_avg"] = macro_avg
         ac_accuracy_table[bl_name] = acc
         ac_bootstrap_table[bl_name] = boot
+        ac_verdicts[bl_name] = build_a13_verdict(
+            bl_name, bl_preds, min_regime_n, boot)
 
+    # Print accuracy table — renders from the SAME verdict objects
+    print(f"\n    Answer-choice accuracy (chance=0.25, UCB ceiling={AC_TOLERANCE}):")
+    print(f"    N={min_regime_n}/regime (activation threshold={CORPUS_SCALE_N_ACTIVATION})")
+    print(f"    {'Baseline':<25} {'MacroAvg':>8} {'CLEAN':>8} {'INSUF':>8} "
+          f"{'DECOY':>8} {'CONFLICT':>8}  {'UCB95':>8} {'Status':>22}")
+    print(f"    {'-'*25} {'-'*8} {'-'*8} {'-'*8} {'-'*8} {'-'*8}  "
+          f"{'-'*8} {'-'*22}")
+    for bl_name in ac_results:
+        v = ac_verdicts[bl_name]
+        macro_result = compute_macro_avg_accuracy(ac_results[bl_name])
         regime_strs = []
         for regime in REGIMES:
-            r_acc = per_regime.get(regime, {}).get("accuracy", 0.0)
+            r_acc = macro_result["per_regime"].get(
+                regime, {}).get("accuracy", 0.0)
             regime_strs.append(f"{r_acc:>8.4f}")
-        gate_str = "PASS" if boot["gate_passes"] else "FAIL"
-        print(f"    {bl_name:<25} {macro_avg:>8.4f} {' '.join(regime_strs)}  {boot['upper_95']:>8.4f} {gate_str:>6}")
+        print(f"    {bl_name:<25} {v['point_estimate']:>8.4f} "
+              f"{' '.join(regime_strs)}  {v['ucb']:>8.4f} "
+              f"{v['final_status']:>22}")
 
     # Per-regime diagnostic flags (non-gating, for human review)
     diagnostic_flags = []
     for bl_name, bl_preds in ac_results.items():
         macro_result = compute_macro_avg_accuracy(bl_preds)
         for regime in REGIMES:
-            r_acc = macro_result["per_regime"].get(regime, {}).get("accuracy", 0.0)
+            r_acc = macro_result["per_regime"].get(
+                regime, {}).get("accuracy", 0.0)
             if r_acc > 0.80:
                 diagnostic_flags.append(
                     f"    [DIAG] {bl_name}: {regime} accuracy={r_acc:.4f} "
@@ -567,80 +577,98 @@ def run_gates():
         for flag in diagnostic_flags:
             print(flag)
 
-    # Save answer-choice predictions
+    # Save answer-choice predictions + verdicts
     ac_json_path = os.path.join(OUT_DIR, "answer_choice_predictions.json")
     with open(ac_json_path, "w") as f:
         json.dump({"baselines": ac_results,
                    "accuracy_table": ac_accuracy_table,
-                   "bootstrap_table": ac_bootstrap_table},
+                   "bootstrap_table": ac_bootstrap_table,
+                   "verdicts": ac_verdicts},
                   f, indent=2, default=str)
     print(f"    Saved: {ac_json_path}")
 
     # ============================================================
-    # GATE A13: Answer-choice macro-avg UCB gate (v3.2.5 redefinition)
+    # GATE A13: Answer-choice macro-avg UCB gate (v3.2.6)
     # ============================================================
     # Statistic: macro-average accuracy (mean of 4 per-regime accuracies).
-    # Gate rule (corpus-scale, N >= MIN_N_PER_REGIME per regime):
-    #   one-sided 95% UCB (grouped family bootstrap) <= 0.30.
-    # At sample-scale (N < MIN_N_PER_REGIME): completeness + point
-    #   estimate check only; UCB reported as informational.
+    # Activation:
+    #   N < 500/regime  → DEFERRED_NOT_EVALUATED (diagnostics only).
+    #   N >= 500/regime → ENFORCED: UCB <= 0.30 (grouped family bootstrap).
     # Resampling unit: template family.
     # No structural exemptions — always-abstain yields macro-avg=0.25
     # (exactly chance) without any carve-out.
+    # N=500 ACTIVATES but does NOT guarantee a pass.
 
-    # Determine if we have corpus-scale N
-    min_regime_n = min(len(by_regime.get(r, [])) for r in REGIMES)
-    corpus_scale = min_regime_n >= CORPUS_SCALE_MIN_N_PER_REGIME
-    if corpus_scale:
-        a13_desc = ("Answer-choice evaluation: complete coverage, "
+    # Completeness check (always enforced, at any N)
+    completeness_violations = []
+    expected_ids = {it.id for it in items}
+    for bl_name, bl_preds in ac_results.items():
+        covered_ids = {p["item_id"] for p in bl_preds}
+        missing = expected_ids - covered_ids
+        if missing:
+            completeness_violations.append(
+                f"{bl_name}: missing {len(missing)} items: "
+                f"{sorted(missing)[:3]}")
+
+    # Build overall verdict from per-baseline verdicts
+    overall_verdict = build_a13_overall_verdict(
+        list(ac_verdicts.values()), completeness_violations)
+
+    overall_mode = overall_verdict["active_mode"]
+    overall_status = overall_verdict["final_status"]
+
+    if overall_mode == "DEFERRED_NOT_EVALUATED":
+        a13_desc = (f"Answer-choice evaluation: DEFERRED_NOT_EVALUATED "
+                    f"(N={min_regime_n}/regime < {CORPUS_SCALE_N_ACTIVATION}; "
+                    f"illustrative diagnostics only)")
+    elif overall_status == "PASS":
+        a13_desc = (f"Answer-choice evaluation: ENFORCED, "
                     f"macro-avg UCB <= {AC_TOLERANCE} (grouped bootstrap)")
     else:
-        a13_desc = ("Answer-choice evaluation: complete coverage, "
-                    f"macro-avg point estimate check "
-                    f"(N={min_regime_n}/regime < {CORPUS_SCALE_MIN_N_PER_REGIME}; "
-                    f"UCB informational only)")
+        a13_desc = (f"Answer-choice evaluation: ENFORCED, "
+                    f"macro-avg UCB > {AC_TOLERANCE}")
 
     g = Gate("A13", a13_desc, "A")
     try:
-        ac_violations = []
-
-        # Check completeness: every baseline must cover all items
-        expected_ids = {it.id for it in items}
-        for bl_name, bl_preds in ac_results.items():
-            covered_ids = {p["item_id"] for p in bl_preds}
-            missing = expected_ids - covered_ids
-            if missing:
-                ac_violations.append(
-                    f"{bl_name}: missing {len(missing)} items: "
-                    f"{sorted(missing)[:3]}")
-
-        # PRIMARY GATE: macro-avg check (no exemptions)
-        for bl_name in ac_results:
-            boot = ac_bootstrap_table[bl_name]
-            if corpus_scale:
-                # Corpus-scale: enforce UCB <= tolerance
-                if not boot["gate_passes"]:
-                    ac_violations.append(
-                        f"{bl_name}: macro-avg UCB95={boot['upper_95']:.4f} "
-                        f"> {AC_TOLERANCE} "
-                        f"(point={boot['point_macro_avg']:.4f})")
-            else:
-                # Sample-scale: enforce point estimate <= tolerance only
-                # (UCB is not meaningful at small N — reported in table)
-                if boot["point_macro_avg"] > AC_TOLERANCE:
-                    ac_violations.append(
-                        f"{bl_name}: macro-avg point={boot['point_macro_avg']:.4f} "
-                        f"> {AC_TOLERANCE}")
-
-        g.passed = len(ac_violations) == 0
-        g.result = f"{len(ac_violations)} violations"
-        if ac_violations:
-            g.error = "; ".join(ac_violations[:5])
+        if overall_mode == "DEFERRED_NOT_EVALUATED":
+            # DEFERRED: gate is neither pass nor fail.
+            # Set passed=True so it does NOT trigger any_a_failed,
+            # but mark it clearly as deferred.
+            g.passed = True
+            g.result = {
+                "active_mode": "DEFERRED_NOT_EVALUATED",
+                "final_status": "DEFERRED_NOT_EVALUATED",
+                "n_per_regime": min_regime_n,
+                "activation_threshold": CORPUS_SCALE_N_ACTIVATION,
+                "verdicts": ac_verdicts,
+            }
+        else:
+            # ENFORCED: gate pass/fail determined by verdicts
+            g.passed = (overall_status == "PASS")
+            g.result = {
+                "active_mode": "ENFORCED",
+                "final_status": overall_status,
+                "n_per_regime": min_regime_n,
+                "verdicts": ac_verdicts,
+            }
+            if not g.passed:
+                failing = [v for v in ac_verdicts.values()
+                           if v["final_status"] == "FAIL"]
+                fail_msgs = [
+                    f"{v['baseline']}: UCB95={v['ucb']:.4f} > {AC_TOLERANCE}"
+                    for v in failing]
+                g.error = "; ".join(
+                    completeness_violations[:3] + fail_msgs[:3])
     except Exception as e:
         g.passed = False
         g.error = traceback.format_exc()
     gates.append(g)
-    print(f"[{'PASS' if g.passed else 'FAIL'}] {g.gate_id}: {g.description}")
+    # Print with consistent status from verdict
+    if overall_mode == "DEFERRED_NOT_EVALUATED":
+        print(f"[DEFERRED] {g.gate_id}: {g.description}")
+    else:
+        print(f"[{'PASS' if g.passed else 'FAIL'}] {g.gate_id}: "
+              f"{g.description}")
     if not g.passed:
         any_a_failed = True
 
@@ -1192,7 +1220,12 @@ def run_gates():
 
     print(f"\n  CLASS A (completeness/machinery) — HARD-FAIL if any fails:")
     for g in a_gates:
-        print(f"    [{'PASS' if g.passed else 'FAIL'}] {g.gate_id}: {g.description}")
+        # A13 DEFERRED_NOT_EVALUATED renders as [DEFERRED], not [PASS]/[FAIL]
+        if (g.gate_id == "A13" and isinstance(g.result, dict)
+                and g.result.get("active_mode") == "DEFERRED_NOT_EVALUATED"):
+            print(f"    [DEFERRED] {g.gate_id}: {g.description}")
+        else:
+            print(f"    [{'PASS' if g.passed else 'FAIL'}] {g.gate_id}: {g.description}")
 
     print(f"\n  SANITY gates — HARD-FAIL if any fails:")
     for g in sanity_gates:

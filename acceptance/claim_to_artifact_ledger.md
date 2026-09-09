@@ -134,10 +134,48 @@ Factual record of what prior review rounds CLAIMED versus what the artifacts ACT
 - Sample size assumption: N=500/regime → 2,000 total for corpus-scale validation
 - The 0.30 ceiling derives from one-sided 95% normal-approx UCB at N=500, chance=0.25 ≈ 0.282, rounded to 0.30
 - No structural exemptions; always-abstain yields macro-avg=0.25 without any carve-out
-- CORPUS_SCALE_MIN_N_PER_REGIME = 30: minimum per-regime N for UCB enforcement
+- Minimum per-regime N for UCB enforcement: 30 (superseded by N=500 activation in v3.2.6)
 
 **Gate summary (v3.2.5):**
 - Class A: A1-A18, all 18 PASS
+- SANITY: SA1-SA4, all 4 PASS
+- Class B: illustrative (N=16), not hard-fail
+- Exit code: 0
+
+---
+
+## Round: v7 (v3.2.6 — A13 activation semantics correction)
+
+**Prior claim:** "v3.2.5 A13 uses macro-avg UCB with N=30 activation threshold and point-estimate fallback below N=30."
+
+**Reviewer finding:** The N=30 threshold was a discretionary choice not in the preregistered specification. It also introduced a point-estimate fallback gate at small N and a table/runner contradiction (table showed "FAIL" for position baselines while the gate showed "PASS"). These were identified as issues requiring correction.
+
+**Changes implemented in this round (v3.2.6):**
+
+| # | Item | Actual implementation | Verdict |
+|---|------|----------------------|---------|
+| 1 | Removed N=30 activation threshold | Deleted `CORPUS_SCALE_MIN_N_PER_REGIME` constant and all associated logic. `grep -rn "MIN_N_PER_REGIME\|CORPUS_SCALE_MIN_N" acceptance/` returns zero matches. | IMPLEMENTED |
+| 2 | DEFERRED_NOT_EVALUATED / ENFORCED activation at N=500 | `CORPUS_SCALE_N_ACTIVATION = 500`. N < 500/regime → `DEFERRED_NOT_EVALUATED` (neither pass nor fail; diagnostics only). N >= 500/regime → `ENFORCED` (UCB <= 0.30 rule applied). | IMPLEMENTED — test_n8_deferred, test_n499_deferred, test_n500_enforced |
+| 3 | No point-estimate fallback | At N < 500, A13 does NOT substitute any point-estimate gate. Construction invariants (A14-A18) and prediction completeness provide small-sample protection. | IMPLEMENTED |
+| 4 | Authoritative verdict object | `build_a13_verdict()` and `build_a13_overall_verdict()` in baselines.py. Single source of truth: `n_per_regime`, `active_mode`, `point_estimate`, `ucb`, `final_status`. Console table, JSON manifest, and exit-code all render from the same object. | IMPLEMENTED — test_verdict_consistency |
+| 5 | Table/runner contradiction eliminated | At N=8, all baselines show `DEFERRED_NOT_EVALUATED` in the Status column — no "FAIL" cells. Gate line shows `[DEFERRED]`. | IMPLEMENTED |
+| 6 | 6 new frozen regression tests | TestA13ActivationSemantics class: (a) N=8 deferred, (b) N=499 deferred, (c) N=500 enforced, (d) N=500 UCB<=0.30 passes, (e) N=500 UCB>0.30 fails, (f) verdict consistency. | IMPLEMENTED — 6/6 PASS |
+| 7 | Existing 7 TestA13MacroAvgUCB tests still pass | Macro-avg, UCB-not-point, grouped-bootstrap, etc. | CONFIRMED — 7/7 PASS |
+| 8 | Runner fail-closed on invariants | Missing predictions, malformed records, non-finite metrics, and construction invariant failures still fail at every N, independent of A13 deferral. | CONFIRMED |
+
+**A13 definition (v3.2.6):**
+- Statistic: macro-average accuracy = mean(CLEAN_acc, INSUF_acc, DECOY_acc, CONFLICT_acc)
+- Activation: N < 500/regime → DEFERRED_NOT_EVALUATED; N >= 500/regime → ENFORCED
+- Gate rule (ENFORCED): one-sided 95% UCB (grouped family bootstrap, 10,000 replicates) <= 0.30
+- N=500 ACTIVATES but does NOT guarantee a pass; insufficient family diversity at N>=500 produces an honest failure
+- Resampling unit: template family
+- UCB derivation: 95th percentile of bootstrap distribution of macro-average accuracy
+- Sample size assumption: N=500/regime → 2,000 total for corpus-scale validation
+- The 0.30 ceiling derives from one-sided 95% normal-approx UCB at N=500, chance=0.25 ≈ 0.282, rounded to 0.30
+- No structural exemptions; always-abstain yields macro-avg=0.25 without any carve-out
+
+**Gate summary (v3.2.6):**
+- Class A: A1-A18, 17 PASS + A13 DEFERRED_NOT_EVALUATED (at N=8/regime)
 - SANITY: SA1-SA4, all 4 PASS
 - Class B: illustrative (N=16), not hard-fail
 - Exit code: 0

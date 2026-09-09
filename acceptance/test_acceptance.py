@@ -56,8 +56,9 @@ from acceptance.baselines import (
     extract_context_only_text,
     run_answer_choice_baselines, compute_answer_choice_accuracy,
     compute_macro_avg_accuracy, grouped_family_bootstrap_macro_avg,
+    build_a13_verdict, build_a13_overall_verdict,
     _prediction_credit, REGIMES,
-    CORPUS_SCALE_AC_TOLERANCE,
+    CORPUS_SCALE_AC_TOLERANCE, CORPUS_SCALE_N_ACTIVATION,
 )
 import tiktoken
 
@@ -1141,3 +1142,142 @@ class TestA13MacroAvgUCB:
             f"(family-level resampling), got {boot_2fam['bootstrap_std']:.4f}. "
             f"This suggests item-level resampling was used instead of "
             f"grouped family resampling.")
+
+
+# ====================================================================
+# v3.2.6 A13 ACTIVATION SEMANTICS REGRESSION TESTS
+# ====================================================================
+# These tests verify DEFERRED_NOT_EVALUATED / ENFORCED activation at
+# N=500, the authoritative verdict object, and table/manifest/exit
+# consistency.
+
+class TestA13ActivationSemantics:
+    """v3.2.6 regression tests for N=500 activation and verdict objects."""
+
+    def test_n8_deferred(self):
+        """(a) N=8/regime → DEFERRED_NOT_EVALUATED."""
+        preds = _make_synthetic_predictions({
+            regime: [("fam_a", True), ("fam_b", False)] * 4
+            for regime in REGIMES
+        })
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=100, seed=42)
+        v = build_a13_verdict("test_bl", preds, n_per_regime=8, boot_result=boot)
+        assert v["active_mode"] == "DEFERRED_NOT_EVALUATED"
+        assert v["final_status"] == "DEFERRED_NOT_EVALUATED"
+        assert v["n_per_regime"] == 8
+        # Point estimate and UCB are still populated as diagnostics
+        assert "point_estimate" in v
+        assert "ucb" in v
+
+    def test_n499_deferred(self):
+        """(b) N=499/regime → DEFERRED_NOT_EVALUATED."""
+        preds = _make_synthetic_predictions({
+            regime: [("fam_a", False)] * 499
+            for regime in REGIMES
+        })
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=100, seed=42)
+        v = build_a13_verdict("test_bl", preds, n_per_regime=499, boot_result=boot)
+        assert v["active_mode"] == "DEFERRED_NOT_EVALUATED"
+        assert v["final_status"] == "DEFERRED_NOT_EVALUATED"
+        assert v["n_per_regime"] == 499
+
+    def test_n500_enforced(self):
+        """(c) N=500/regime → ENFORCED."""
+        # 25 families, 20 items per family per regime = 500/regime.
+        # All wrong → macro-avg = 0.0, UCB ≈ 0.0 → PASS.
+        families = [f"fam_{i}" for i in range(25)]
+        preds = _make_synthetic_predictions({
+            regime: [
+                entry
+                for fam in families
+                for entry in [(fam, False)] * 20
+            ]
+            for regime in REGIMES
+        })
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=100, seed=42)
+        v = build_a13_verdict("test_bl", preds, n_per_regime=500, boot_result=boot)
+        assert v["active_mode"] == "ENFORCED"
+        assert v["n_per_regime"] == 500
+        # All wrong: UCB should be 0.0 ≤ 0.30 → PASS
+        assert v["final_status"] == "PASS"
+
+    def test_n500_ucb_below_030_passes(self):
+        """(d) At N=500, constructed case whose UCB ≤ 0.30 → PASS."""
+        # 25 families, 20 items each per regime = 500/regime.
+        # 5 correct + 15 wrong per family per regime = 0.25.
+        families = [f"fam_{i}" for i in range(25)]
+        preds = _make_synthetic_predictions({
+            regime: [
+                entry
+                for fam in families
+                for entry in [(fam, True)] * 5 + [(fam, False)] * 15
+            ]
+            for regime in REGIMES
+        })
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=5000, seed=42)
+        v = build_a13_verdict("test_bl", preds, n_per_regime=500, boot_result=boot)
+        assert v["active_mode"] == "ENFORCED"
+        assert abs(v["point_estimate"] - 0.25) < 1e-9
+        assert v["ucb"] <= 0.30, f"UCB={v['ucb']:.4f} > 0.30"
+        assert v["final_status"] == "PASS"
+
+    def test_n500_ucb_above_030_fails(self):
+        """(e) At N=500, constructed case whose UCB > 0.30 → FAIL."""
+        # 2 families at 500/regime total. fam_a: all correct. fam_b: all wrong.
+        # Point = 0.50. Family-level bootstrap with 2 families produces
+        # huge variance → UCB well above 0.30.
+        preds = _make_synthetic_predictions({
+            regime: [("fam_a", True)] * 250 + [("fam_b", False)] * 250
+            for regime in REGIMES
+        })
+        boot = grouped_family_bootstrap_macro_avg(preds, n_bootstrap=2000, seed=42)
+        v = build_a13_verdict("test_bl", preds, n_per_regime=500, boot_result=boot)
+        assert v["active_mode"] == "ENFORCED"
+        assert v["ucb"] > 0.30, f"UCB={v['ucb']:.4f} should exceed 0.30"
+        assert v["final_status"] == "FAIL"
+
+    def test_verdict_consistency(self):
+        """(f) Consistency: verdict object's active_mode/final_status agree
+        with what overall_verdict produces and what the runner would render.
+
+        At N=8, all verdicts should show DEFERRED_NOT_EVALUATED everywhere.
+        No baseline should show PASS or FAIL.
+        """
+        families = ["fam_a", "fam_b"]
+        preds_per_bl = {}
+        for bl_name in ["ac_always_abstain", "ac_position_0"]:
+            preds = _make_synthetic_predictions({
+                regime: [(fam, bl_name == "ac_always_abstain"
+                          and regime == "INSUFFICIENT")
+                         for fam in families]
+                for regime in REGIMES
+            })
+            preds_per_bl[bl_name] = preds
+
+        # Build per-baseline verdicts at N=8
+        verdicts = {}
+        for bl_name, bl_preds in preds_per_bl.items():
+            boot = grouped_family_bootstrap_macro_avg(
+                bl_preds, n_bootstrap=100, seed=42)
+            v = build_a13_verdict(bl_name, bl_preds, n_per_regime=8,
+                                  boot_result=boot)
+            verdicts[bl_name] = v
+            # Each baseline must show DEFERRED
+            assert v["active_mode"] == "DEFERRED_NOT_EVALUATED", (
+                f"{bl_name}: expected DEFERRED_NOT_EVALUATED, "
+                f"got {v['active_mode']}")
+            assert v["final_status"] == "DEFERRED_NOT_EVALUATED", (
+                f"{bl_name}: expected final_status=DEFERRED_NOT_EVALUATED, "
+                f"got {v['final_status']}")
+
+        # Overall verdict must also be DEFERRED
+        overall = build_a13_overall_verdict(
+            list(verdicts.values()), completeness_violations=[])
+        assert overall["active_mode"] == "DEFERRED_NOT_EVALUATED"
+        assert overall["final_status"] == "DEFERRED_NOT_EVALUATED"
+
+        # With completeness violations, overall must FAIL even at N=8
+        overall_fail = build_a13_overall_verdict(
+            list(verdicts.values()),
+            completeness_violations=["bl_x: missing 3 items"])
+        assert overall_fail["final_status"] == "FAIL"

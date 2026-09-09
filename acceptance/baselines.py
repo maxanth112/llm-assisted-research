@@ -438,25 +438,33 @@ def answer_choice_fixed_position(items, fixed_pos):
 
 
 # ============================================================
-# CORPUS-SCALE ANSWER-CHOICE TOLERANCE (ITEM 4, updated v3.2.5)
+# CORPUS-SCALE ANSWER-CHOICE TOLERANCE (v3.2.6)
 # ============================================================
 # Ceiling on the one-sided 95% UPPER CONFIDENCE BOUND of the
 # macro-average answer-choice accuracy across the four regimes.
 #
-# Gate A13 definition (v3.2.5):
+# Gate A13 definition (v3.2.6):
 #   statistic = macro-avg accuracy = mean(CLEAN_acc, INSUF_acc,
 #               DECOY_acc, CONFLICT_acc)
 #   gate rule = UCB_95(statistic) <= CORPUS_SCALE_AC_TOLERANCE
 #   resampling unit = template family (grouped bootstrap)
 #   UCB = 95th percentile of the bootstrap distribution
 #
+# Activation semantics:
+#   N < 500 per regime  → DEFERRED_NOT_EVALUATED.  The gate is
+#       neither pass nor fail.  Point estimate and UCB are
+#       computed and displayed as illustrative diagnostics only.
+#       They do NOT affect the exit code.
+#   N >= 500 per regime → ENFORCED.  The frozen rule applies:
+#       PASS iff grouped-family-bootstrap UCB <= 0.30.
+#       N=500 ACTIVATES but does NOT guarantee a pass. If
+#       grouped family-level uncertainty remains too wide (e.g.,
+#       too few genuinely distinct template families), the gate
+#       produces an HONEST FAILURE — no carve-out.
+#
 # The 0.30 ceiling was derived from a one-sided 95% normal-approx
 # UCB at N=500/regime, chance=0.25:
 #   0.25 + 1.645 * sqrt(0.25*0.75/500) ≈ 0.282, rounded up to 0.30.
-#
-# The gate compares the bootstrap UCB (not the raw point estimate)
-# against 0.30.  A raw point estimate below 0.30 can still FAIL
-# if its bootstrap UCB exceeds 0.30.
 #
 # Per-regime accuracies are DIAGNOSTIC only (reported for human
 # review, but not independently gating).  always-abstain scores
@@ -468,13 +476,10 @@ def answer_choice_fixed_position(items, fixed_pos):
 # at chance=0.25.
 CORPUS_SCALE_AC_TOLERANCE = 0.30
 
-# Minimum per-regime N for the UCB to be statistically meaningful.
-# At N < this threshold, the grouped bootstrap UCB is dominated by
-# sampling noise (e.g., at N=8/regime with 8 families, a true-chance
-# baseline yields UCB ≈ 0.50).  Below this threshold the runner
-# reports the UCB as informational and enforces only completeness +
-# point-estimate checks.  The 0.30 ceiling was derived at N=500.
-CORPUS_SCALE_MIN_N_PER_REGIME = 30
+# Preregistered activation threshold.  Below this N per regime,
+# A13 is DEFERRED_NOT_EVALUATED (diagnostics only, no exit-code
+# impact).  At or above this N, A13 is ENFORCED (UCB <= 0.30).
+CORPUS_SCALE_N_ACTIVATION = 500
 
 
 def run_answer_choice_baselines(items):
@@ -537,7 +542,7 @@ def compute_answer_choice_accuracy(predictions, by_regime=False):
 
 
 # ================================================================
-# MACRO-AVERAGE ACCURACY + GROUPED BOOTSTRAP UCB (v3.2.5)
+# MACRO-AVERAGE ACCURACY + GROUPED BOOTSTRAP UCB (v3.2.5, v3.2.6)
 # ================================================================
 #
 # The A13 corpus-scale answer-choice gate uses:
@@ -691,6 +696,73 @@ def grouped_family_bootstrap_macro_avg(predictions,
         "bootstrap_std": float(np.std(boot_arr)),
         "bootstrap_5th": float(np.percentile(boot_arr, 5)),
         "bootstrap_95th": upper_95,
+    }
+
+
+def build_a13_verdict(baseline_name, predictions, n_per_regime, boot_result):
+    """Build the single authoritative A13 verdict object for one baseline.
+
+    Activation semantics (v3.2.6):
+      N < 500/regime  → active_mode = DEFERRED_NOT_EVALUATED
+                        (diagnostics only — neither pass nor fail)
+      N >= 500/regime → active_mode = ENFORCED
+                        PASS iff UCB <= 0.30
+
+    The verdict carries all fields that the console table, JSON
+    manifest, and runner exit-code decision render from.  There is
+    exactly ONE source of truth per baseline.
+    """
+    enforced = n_per_regime >= CORPUS_SCALE_N_ACTIVATION
+    active_mode = "ENFORCED" if enforced else "DEFERRED_NOT_EVALUATED"
+
+    if enforced:
+        final_status = "PASS" if boot_result["gate_passes"] else "FAIL"
+    else:
+        final_status = "DEFERRED_NOT_EVALUATED"
+
+    return {
+        "baseline": baseline_name,
+        "n_per_regime": n_per_regime,
+        "active_mode": active_mode,
+        "point_estimate": boot_result["point_macro_avg"],
+        "ucb": boot_result["upper_95"],
+        "tolerance": CORPUS_SCALE_AC_TOLERANCE,
+        "final_status": final_status,
+        "n_families": boot_result["n_families"],
+        "n_bootstrap": boot_result["n_bootstrap"],
+    }
+
+
+def build_a13_overall_verdict(per_baseline_verdicts, completeness_violations):
+    """Build the overall A13 gate verdict from per-baseline verdicts.
+
+    If ANY baseline is ENFORCED and FAILs, or if there are
+    completeness violations, the overall verdict is FAIL.
+    If all baselines are DEFERRED_NOT_EVALUATED and there are no
+    completeness violations, the overall verdict is DEFERRED_NOT_EVALUATED.
+    If all ENFORCED baselines PASS and no violations, overall is PASS.
+    """
+    if completeness_violations:
+        return {
+            "active_mode": "ENFORCED",
+            "final_status": "FAIL",
+            "reason": "completeness violations: " + "; ".join(
+                completeness_violations[:3]),
+        }
+
+    modes = set(v["active_mode"] for v in per_baseline_verdicts)
+    statuses = [v["final_status"] for v in per_baseline_verdicts
+                if v["active_mode"] == "ENFORCED"]
+
+    if "ENFORCED" in modes:
+        if "FAIL" in statuses:
+            return {"active_mode": "ENFORCED", "final_status": "FAIL"}
+        return {"active_mode": "ENFORCED", "final_status": "PASS"}
+
+    # All DEFERRED
+    return {
+        "active_mode": "DEFERRED_NOT_EVALUATED",
+        "final_status": "DEFERRED_NOT_EVALUATED",
     }
 
 

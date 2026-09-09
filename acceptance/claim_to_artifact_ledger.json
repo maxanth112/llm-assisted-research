@@ -287,6 +287,76 @@
         "class_b": "illustrative (N=16)",
         "exit_code": 0
       }
+    },
+    {
+      "round": "v7",
+      "artifact": "acceptance_manifest.json",
+      "artifact_location": "acceptance/acceptance_manifest.json",
+      "generator_version": "3.2.6",
+      "prior_claim": "v3.2.5 A13 uses macro-avg UCB with N=30 activation threshold and point-estimate fallback below N=30",
+      "reviewer_findings": "The N=30 threshold was discretionary (not preregistered). It introduced a point-estimate fallback at small N and a table/runner contradiction (table showed FAIL for position baselines while gate showed PASS).",
+      "changes": [
+        {
+          "item": "1",
+          "description": "Removed N=30 activation threshold",
+          "implementation": "Deleted CORPUS_SCALE_MIN_N_PER_REGIME constant and all associated logic from baselines.py and run_acceptance.py."
+        },
+        {
+          "item": "2",
+          "description": "DEFERRED_NOT_EVALUATED / ENFORCED activation at N=500",
+          "implementation": "CORPUS_SCALE_N_ACTIVATION = 500 in baselines.py. N < 500/regime -> DEFERRED_NOT_EVALUATED. N >= 500/regime -> ENFORCED (UCB <= 0.30).",
+          "verification": "test_n8_deferred PASS, test_n499_deferred PASS, test_n500_enforced PASS"
+        },
+        {
+          "item": "3",
+          "description": "No point-estimate fallback",
+          "implementation": "At N < 500, A13 does NOT substitute any point-estimate gate. Construction invariants (A14-A18) and prediction completeness provide small-sample protection."
+        },
+        {
+          "item": "4",
+          "description": "Authoritative verdict object",
+          "implementation": "build_a13_verdict() and build_a13_overall_verdict() in baselines.py. Single source of truth: n_per_regime, active_mode, point_estimate, ucb, final_status. Console table, JSON manifest, and exit-code all render from the same object.",
+          "verification": "test_verdict_consistency PASS"
+        },
+        {
+          "item": "5",
+          "description": "Table/runner contradiction eliminated",
+          "implementation": "At N=8, all baselines show DEFERRED_NOT_EVALUATED in Status column. Gate line shows [DEFERRED]. No FAIL cells."
+        },
+        {
+          "item": "6",
+          "description": "6 new frozen regression tests",
+          "implementation": "TestA13ActivationSemantics: (a) N=8 deferred, (b) N=499 deferred, (c) N=500 enforced, (d) N=500 UCB<=0.30 passes, (e) N=500 UCB>0.30 fails, (f) verdict consistency.",
+          "verification": "6/6 PASS"
+        },
+        {
+          "item": "7",
+          "description": "Existing 7 TestA13MacroAvgUCB tests still pass",
+          "verification": "7/7 PASS"
+        },
+        {
+          "item": "8",
+          "description": "Runner fail-closed on invariants",
+          "implementation": "Missing predictions, malformed records, non-finite metrics, and construction invariant failures still fail at every N, independent of A13 deferral."
+        }
+      ],
+      "a13_definition": {
+        "statistic": "macro-average accuracy = mean(CLEAN_acc, INSUF_acc, DECOY_acc, CONFLICT_acc)",
+        "activation": "N < 500/regime -> DEFERRED_NOT_EVALUATED; N >= 500/regime -> ENFORCED",
+        "gate_rule_enforced": "one-sided 95% UCB (grouped family bootstrap, 10,000 replicates) <= 0.30",
+        "n500_note": "N=500 activates but does NOT guarantee a pass; insufficient family diversity produces an honest failure",
+        "resampling_unit": "template family",
+        "ucb_derivation": "95th percentile of bootstrap distribution of macro-average accuracy",
+        "sample_size_assumption": "N=500/regime -> 2,000 total for corpus-scale validation",
+        "tolerance_derivation": "one-sided 95% normal-approx UCB at N=500, chance=0.25 ~ 0.282, rounded to 0.30",
+        "structural_exemptions": "none; always-abstain yields macro-avg=0.25 without any carve-out"
+      },
+      "gate_summary": {
+        "class_a": "17/18 PASS + A13 DEFERRED_NOT_EVALUATED (N=8/regime)",
+        "sanity": "4/4 PASS",
+        "class_b": "illustrative (N=16)",
+        "exit_code": 0
+      }
     }
   ]
 }

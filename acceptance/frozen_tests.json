@@ -1,10 +1,10 @@
 {
-  "frozen_at": "2026-09-08T21:19:51Z",
+  "frozen_at": "2026-09-09T05:39:25Z",
   "files": {
-    "acceptance/run_acceptance.py": "ca7993e413bec9de6c50ff1f729e2104179e1e6d602633d2f26e999561f97c4b",
-    "acceptance/test_acceptance.py": "fad72bb856c6cdd1ea52c3bcb17462525d601bc612168cbb4301b48c6615117e",
+    "acceptance/run_acceptance.py": "f8a0e73228e484a50f7afd517d7e9d6e8a911e560ce3ce3fce4c84dc1bc0c82a",
+    "acceptance/test_acceptance.py": "a0cde756529c52b64e34a7b7d01010d82d8e127542c314633e72a2b67edf5f41",
     "acceptance/oracles.py": "d58e8f419c3580b9a9e4a2b7e38078b9453b88aba1ea8b9349139eee775b055c",
-    "acceptance/baselines.py": "8f13f4b187ba1799552a6a14e8ac94293aa860c085aea35362ca59715932bd1a",
+    "acceptance/baselines.py": "2fc1fcf06321bdd7565ee879f33981aefc933a610ba6971395409d2d1c401789",
     "acceptance/bootstrap.py": "4336ba27ab77a749b0de56db0c17fab20d3dcec05fad231d8baba16f3d5352f2",
     "tests/test_credential_guard.py": "9fb14515ee2e6358a8a3080ee1e79c7a86569108b1560b7a5f6bbac6c6bfd268",
     "harness/credential_guard.py": "2e40dcbb96d76570aaa2d0fa2ed369d314c7015047bf56f7f1374130db680920"
