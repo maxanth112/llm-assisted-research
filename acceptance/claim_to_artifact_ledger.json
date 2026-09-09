@@ -357,6 +357,38 @@
         "class_b": "illustrative (N=16)",
         "exit_code": 0
       }
+    },
+    {
+      "round": "v8",
+      "artifact": "acceptance_manifest.json",
+      "artifact_location": "acceptance/acceptance_manifest.json",
+      "generator_version": "3.2.7",
+      "prior_claim": "The deleted constant CORPUS_SCALE_MIN_N_PER_REGIME does not appear anywhere in acceptance/",
+      "reviewer_findings": "The v7 verification grep was scoped too broadly (whole acceptance/ tree including ledger). Fixup commit 68936ba contorted the ledger to avoid naming the deleted constant CORPUS_SCALE_MIN_N_PER_REGIME literally, just so the broad grep would pass. This is backwards: the ledger should name things plainly; the check should be scoped to executable source only.",
+      "changes": [
+        {
+          "item": "1",
+          "description": "Restore literal constant name in ledger",
+          "implementation": "This v8 round names CORPUS_SCALE_MIN_N_PER_REGIME by its exact identifier. The constant was DELETED from Python source in v3.2.6 and replaced by CORPUS_SCALE_N_ACTIVATION = 500."
+        },
+        {
+          "item": "2",
+          "description": "Properly-scoped absence check",
+          "implementation": "New TestDeletedConstantAbsence class in test_acceptance.py: (a) test_deleted_constant_absent_from_py_source scans *.py files under acceptance/ excluding the test file itself; (b) test_replacement_constant_present_in_source asserts CORPUS_SCALE_N_ACTIVATION = 500 is present in baselines.py. Ledgers, docs, and archive are not searched.",
+          "verification": "2/2 PASS"
+        },
+        {
+          "item": "3",
+          "description": "Append-only discipline",
+          "implementation": "Prior rounds v6 and v7 preserved unmodified. This round appended."
+        }
+      ],
+      "gate_summary": {
+        "class_a": "17/18 PASS + A13 DEFERRED_NOT_EVALUATED (N=8/regime)",
+        "sanity": "4/4 PASS",
+        "class_b": "illustrative (N=16)",
+        "exit_code": 0
+      }
     }
   ]
 }

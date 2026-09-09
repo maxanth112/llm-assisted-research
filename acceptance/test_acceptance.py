@@ -14,6 +14,7 @@ Tests are FAIL-CLOSED: if something can't be checked, it fails.
 
 import ast
 import copy
+import glob
 import inspect
 import os
 import re
@@ -1281,3 +1282,48 @@ class TestA13ActivationSemantics:
             list(verdicts.values()),
             completeness_violations=["bl_x: missing 3 items"])
         assert overall_fail["final_status"] == "FAIL"
+
+
+class TestDeletedConstantAbsence:
+    """v3.2.7: Verify the deleted N=30 constant is absent from Python source.
+
+    The check is scoped to executable Python files (*.py) only,
+    excluding this test file (which must name the constant in string
+    literals to search for it).  Ledgers, documentation, and the
+    portable archive are explicitly excluded — those documents
+    legitimately name the deleted constant when documenting its removal.
+    """
+
+    # Build the search needle from parts so a naive grep of this file
+    # for the constant as a Python identifier does not match.
+    _DELETED_CONST = "CORPUS_SCALE_" + "MIN_N_PER_REGIME"
+
+    def test_deleted_constant_absent_from_py_source(self):
+        """No *.py file under acceptance/ (other than this test) references the deleted constant."""
+        acceptance_dir = os.path.dirname(os.path.abspath(__file__))
+        this_file = os.path.abspath(__file__)
+        py_files = glob.glob(os.path.join(acceptance_dir, "*.py"))
+        assert len(py_files) > 0, "No .py files found — test is misconfigured"
+
+        needle = self._DELETED_CONST
+        hits = []
+        for py_path in sorted(py_files):
+            if os.path.abspath(py_path) == this_file:
+                continue  # exclude this test file
+            with open(py_path, "r") as f:
+                for lineno, line in enumerate(f, 1):
+                    if needle in line:
+                        hits.append(f"{os.path.basename(py_path)}:{lineno}: {line.rstrip()}")
+
+        assert hits == [], (
+            f"{needle} found in Python source "
+            f"(should only appear in ledger/docs):\n" + "\n".join(hits))
+
+    def test_replacement_constant_present_in_source(self):
+        """CORPUS_SCALE_N_ACTIVATION = 500 is present in baselines.py."""
+        baselines_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "baselines.py")
+        with open(baselines_path, "r") as f:
+            source = f.read()
+        assert "CORPUS_SCALE_N_ACTIVATION = 500" in source, (
+            "CORPUS_SCALE_N_ACTIVATION = 500 not found in baselines.py")

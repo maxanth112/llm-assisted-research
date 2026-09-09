@@ -181,3 +181,25 @@ Factual record of what prior review rounds CLAIMED versus what the artifacts ACT
 - Exit code: 0
 
 ---
+
+## Round: v8 (v3.2.7 — ledger fidelity + verification scope correction)
+
+**Prior claim:** "The deleted constant `CORPUS_SCALE_MIN_N_PER_REGIME` does not appear anywhere in `acceptance/`."
+
+**Reviewer finding:** The v7 round's verification grep (`grep -rn "MIN_N_PER_REGIME\|CORPUS_SCALE_MIN_N" acceptance/`) was scoped too broadly — it searched the entire `acceptance/` directory including the claim-to-artifact ledger itself. The fixup commit (68936ba) then contorted the ledger to avoid naming the deleted constant `CORPUS_SCALE_MIN_N_PER_REGIME` by its literal identifier, solely to satisfy the broad grep. This is backwards: the ledger's job is to name things plainly, and the verification check should be scoped to executable source only.
+
+**Changes implemented in this round (v3.2.7):**
+
+| # | Item | Actual implementation | Verdict |
+|---|------|----------------------|---------|
+| 1 | Restore literal constant name in ledger | This v8 round names `CORPUS_SCALE_MIN_N_PER_REGIME` by its exact identifier. The constant was DELETED from Python source in v3.2.6 and replaced by `CORPUS_SCALE_N_ACTIVATION = 500`. The ledger documents this deletion plainly. | IMPLEMENTED |
+| 2 | Properly-scoped absence check | New `TestDeletedConstantAbsence` class in test_acceptance.py with two tests: (a) `test_deleted_constant_absent_from_py_source` — scans all `*.py` files under `acceptance/` (excluding the test file itself) and asserts `CORPUS_SCALE_MIN_N_PER_REGIME` is absent; (b) `test_replacement_constant_present_in_source` — asserts `CORPUS_SCALE_N_ACTIVATION = 500` is present in baselines.py. Ledgers (`.md`, `.json`), documentation, and the portable archive are explicitly not searched. | IMPLEMENTED — 2/2 PASS |
+| 3 | Append-only discipline | Prior rounds v6 and v7 are preserved unmodified. This round is appended, not spliced. | CONFIRMED |
+
+**Gate summary (v3.2.7):**
+- Class A: A1-A18, 17 PASS + A13 DEFERRED_NOT_EVALUATED (at N=8/regime)
+- SANITY: SA1-SA4, all 4 PASS
+- Class B: illustrative (N=16), not hard-fail
+- Exit code: 0
+
+---
